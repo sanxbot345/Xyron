@@ -512,6 +512,34 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Dynamic Viewport Height management for mobile virtual keyboard
+  useEffect(() => {
+    if (!window.visualViewport) return;
+
+    const handleViewportResize = () => {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const appRoot = document.getElementById('app_root');
+      if (appRoot) {
+        // Set height of root dynamically to the actual visual viewport height (excluding keyboard on mobile!)
+        appRoot.style.height = `${vv.height}px`;
+      }
+      // Re-scroll to bottom of chat when viewport changes (e.g. keyboard opens)
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.visualViewport.addEventListener('resize', handleViewportResize);
+    window.visualViewport.addEventListener('scroll', handleViewportResize);
+    
+    // Initial sync
+    handleViewportResize();
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleViewportResize);
+      window.visualViewport?.removeEventListener('scroll', handleViewportResize);
+    };
+  }, []);
+
   // Sync scroll on new messages or typing state changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -524,6 +552,13 @@ export default function App() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
     }
   }, [inputText]);
+
+  const handleInputFocus = () => {
+    // When focusing, scroll down smoothly after keyboard has begun transitioning in
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 250);
+  };
 
   const handleSendMessage = async (customText?: string, customFile?: File | null) => {
     const fileForPrompt = customFile !== undefined ? customFile : attachedFile;
@@ -1160,6 +1195,7 @@ export default function App() {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyPress}
+                onFocus={handleInputFocus}
                 placeholder="Tanya Xyron"
                 rows={1}
                 disabled={isPending}
