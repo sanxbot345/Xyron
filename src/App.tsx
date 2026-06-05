@@ -106,13 +106,13 @@ function StreamingThinkingText({ text, onComplete }: StreamingThinkingTextProps)
 
 interface MessageBubbleContentProps {
   text: string;
-  isXyron: boolean;
+  isXenova: boolean;
   isStreaming?: boolean;
   msgId: string;
   onTypewriterComplete: (id: string) => void;
 }
 
-function MessageBubbleContent({ text, isXyron, isStreaming, msgId, onTypewriterComplete }: MessageBubbleContentProps) {
+function MessageBubbleContent({ text, isXenova, isStreaming, msgId, onTypewriterComplete }: MessageBubbleContentProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const { thought, content } = parseThoughtAndContent(text ?? "");
   const [thoughtFinished, setThoughtFinished] = useState(false);
@@ -192,7 +192,7 @@ function MessageBubbleContent({ text, isXyron, isStreaming, msgId, onTypewriterC
   }
 
   // Fallback if no thought block is present
-  return isXyron ? (
+  return isXenova ? (
     isStreaming ? (
       <StreamingText 
         text={text} 
@@ -237,7 +237,7 @@ export default function App() {
     let initialMessages: Message[] = [
       {
         id: 'welcome',
-        sender: 'xyron',
+        sender: 'xenova',
         text: WELCOME_MESSAGE,
         timestamp: Date.now()
       }
@@ -417,6 +417,18 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
   
+  // Repeating state trigger for the header title Xenova
+  const [headerKey, setHeaderKey] = useState(0);
+
+  useEffect(() => {
+    // 6 chars: delay index*0.12s (max 0.6s), duration 0.3s. Total animation completes at 0.9s.
+    // We add 1.6 seconds of readable pause, so the cycle restarts perfectly every 2.5 seconds.
+    const timer = setTimeout(() => {
+      setHeaderKey(prev => prev + 1);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [headerKey]);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -512,6 +524,14 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Sync state refs to prevent stale closure in static visualViewport listener
+  const messagesRef = useRef(messages);
+  const isPendingRef = useRef(isPending);
+  useEffect(() => {
+    messagesRef.current = messages;
+    isPendingRef.current = isPending;
+  }, [messages, isPending]);
+
   // Dynamic Viewport Height management for mobile virtual keyboard
   useEffect(() => {
     if (!window.visualViewport) return;
@@ -529,10 +549,12 @@ export default function App() {
       window.scrollTo(0, 0);
       document.body.scrollTop = 0;
       
-      // Re-scroll to bottom of chat when viewport changes (e.g. keyboard opens)
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 80);
+      // Re-scroll to bottom of chat ONLY when we have active messages
+      if (messagesRef.current.length > 1 || isPendingRef.current) {
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 80);
+      }
     };
 
     window.visualViewport.addEventListener('resize', handleViewportResize);
@@ -562,9 +584,11 @@ export default function App() {
     };
   }, []);
 
-  // Sync scroll on new messages or typing state changes
+  // Sync scroll on new messages or typing state changes ONLY when we have active messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 1 || isPending) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, isPending]);
 
   // Handle textarea autosize
@@ -586,10 +610,12 @@ export default function App() {
     setTimeout(forceReset, 120);
     setTimeout(forceReset, 240);
 
-    // When focusing, scroll down smoothly after keyboard has begun transitioning in
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 250);
+    // When focusing, scroll down smoothly after keyboard has begun transitioning in ONLY when we have active messages
+    if (messages.length > 1 || isPending) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 250);
+    }
   };
 
   const handleSendMessage = async (customText?: string, customFile?: File | null) => {
@@ -662,7 +688,7 @@ export default function App() {
         }
       }
 
-      const response = await fetch('/api/xyron/chat', {
+      const response = await fetch('/api/xenova/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -679,19 +705,19 @@ export default function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Terjadi kesalahan sistem saat menghubungi Xyron.');
+        throw new Error(data.error || 'Terjadi kesalahan sistem saat menghubungi Xenova.');
       }
 
-      const xyronMsg: Message = {
-        id: `xyron-${Date.now()}`,
-        sender: 'xyron',
+      const xenovaMsg: Message = {
+        id: `xenova-${Date.now()}`,
+        sender: 'xenova',
         text: data.text,
         timestamp: Date.now(),
         isStreaming: true,
         sources: data.sources
       };
 
-      setMessages(prev => [...prev, xyronMsg]);
+      setMessages(prev => [...prev, xenovaMsg]);
 
     } catch (error: any) {
       console.error('Chat error:', error);
@@ -699,8 +725,8 @@ export default function App() {
       
       const errorMsg: Message = {
         id: `error-${Date.now()}`,
-        sender: 'xyron',
-        text: `⚠️ **Gagal memuat respons**\n\n${error.message || 'Gagal tersambung dengan server otak Xyron.'}\n\n*Silakan coba kirim ulang masukan Anda.*`,
+        sender: 'xenova',
+        text: `⚠️ **Gagal memuat respons**\n\n${error.message || 'Gagal tersambung dengan server otak Xenova.'}\n\n*Silakan coba kirim ulang masukan Anda.*`,
         timestamp: Date.now(),
         isError: true
       };
@@ -717,11 +743,11 @@ export default function App() {
   };
 
   const clearChatHistory = () => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus seluruh riwayat percakapan dengan Xyron?')) {
+    if (window.confirm('Apakah Anda yakin ingin menghapus seluruh riwayat percakapan dengan Xenova?')) {
       const initialChat: Message[] = [
         {
           id: 'welcome',
-          sender: 'xyron',
+          sender: 'xenova',
           text: WELCOME_MESSAGE,
           timestamp: Date.now()
         }
@@ -778,14 +804,14 @@ export default function App() {
             <div className="flex h-10 w-10 overflow-hidden items-center justify-center rounded-xl border border-slate-800 bg-[#0d1017]/80 shadow-md">
               <img 
                 src="/xyron.jpg" 
-                alt="Xyron Logo" 
+                alt="Xenova Logo" 
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
               />
             </div>
             <div>
-              <h1 className="font-display text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
-                XYRON
+              <h1 className="font-display text-lg font-bold tracking-tight text-white flex items-center gap-1.5 font-sans">
+                XENOVA
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -863,18 +889,6 @@ export default function App() {
         />
       )}
 
-      {/* Subtle Floating Sidebar Opener (when sidebar is closed) */}
-      {!showSidebar && (
-        <button
-          onClick={() => setShowSidebar(true)}
-          className="fixed top-4 left-4 z-50 rounded-full p-2.5 bg-[#0d1017]/90 hover:bg-slate-900 text-slate-400 border border-slate-800/80 hover:text-white transition-all duration-200 cursor-pointer shadow-lg backdrop-blur-xs select-none"
-          title="Buka Menu"
-          id="sidebar_toggle_float"
-        >
-          <Menu className="h-4.5 w-4.5" />
-        </button>
-      )}
-
       {/* 2. CHAT WORKSPACE */}
       <main 
         className="flex flex-1 flex-col h-full bg-[#090b10] relative overflow-hidden" 
@@ -896,6 +910,56 @@ export default function App() {
         }}
       >
         
+        {/* Top Header Bar with Typewriter Xenova Accent */}
+        <header className="flex h-16 items-center justify-between px-4 sm:px-6 border-b border-slate-900 bg-[#0d1017]/50 backdrop-blur-md select-none shrink-0 z-10">
+          <div className="flex items-center gap-3">
+            {/* Sidebar toggle button inside the header */}
+            <button
+              onClick={() => setShowSidebar(prev => !prev)}
+              className="p-2 -ml-2 rounded-xl text-slate-400 hover:bg-slate-950 hover:text-white transition-all cursor-pointer relative"
+              title={showSidebar ? "Tutup Menu" : "Buka Menu"}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            
+            {/* Logo next to header name */}
+            <div className="flex h-8 w-8 overflow-hidden items-center justify-center rounded-lg border border-slate-800 bg-[#0d1017]/80 shadow-md">
+              <img 
+                src="/xyron.jpg" 
+                alt="Xenova Logo" 
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            
+            {/* Header Text Xenova without animated cursor */}
+            <div className="flex items-center gap-2">
+              <span className="font-sans font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center min-w-[70px]">
+                {Array.from("Xenova").map((char, index) => (
+                  <motion.span
+                    key={`${headerKey}-${index}`}
+                    initial={{ opacity: 0, scale: 0.6, filter: 'blur(3px)' }}
+                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                    transition={{
+                      duration: 0.3,
+                      delay: index * 0.12,
+                      ease: "easeOut"
+                    }}
+                  >
+                    {char}
+                  </motion.span>
+                ))}
+              </span>
+              
+              {/* Pulse status indicator */}
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            </div>
+          </div>
+        </header>
+        
         {/* Drag and drop overlay portal */}
         <AnimatePresence>
           {isDragging && (
@@ -913,14 +977,14 @@ export default function App() {
                 <div>
                   <h3 className="text-sm font-bold text-slate-100 mb-1">Letakkan File Anda di Sini</h3>
                   <p className="text-[11px] leading-relaxed text-slate-450">
-                    Xyron akan melampirkan berkas, dokumen, gambar, atau kode ini ke dalam sesi obrolan Anda secara otomatis.
+                    Xenova akan melampirkan berkas, dokumen, gambar, atau kode ini ke dalam sesi obrolan Anda secara otomatis.
                   </p>
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-
+ 
         {/* Workspace Messages Area */}
         <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-6">
           <AnimatePresence initial={false}>
@@ -932,17 +996,16 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.35, ease: 'easeOut' }}
-                className="max-w-2xl mx-auto py-16 md:py-24 text-center space-y-8 px-4"
+                className="max-w-2xl mx-auto py-6 sm:py-16 md:py-24 text-center space-y-4 sm:space-y-8 px-4"
               >
                 {/* Minimalist typography header */}
                 <div className="space-y-3">
-                  <h2 className="font-display text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-450 bg-clip-text text-transparent">
-                    Saya Xyron, Ada yang bisa saya bantu?
+                  <h2 className="font-display text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-450 bg-clip-text text-transparent">
+                    Saya Xenova, Ada yang bisa saya bantu?
                   </h2>
-                  <p className="text-xs md:text-sm text-slate-400 max-w-lg mx-auto font-medium">
+                  <p className="text-[11px] sm:text-xs md:text-sm text-slate-400 max-w-lg mx-auto font-medium leading-relaxed">
                     Asisten AI profesional untuk pemrograman, analisis bug, penataan arsitektur, dan penciptaan website modern terstruktur.
                   </p>
-
                 </div>
               </motion.div>
             ) : (
@@ -951,8 +1014,8 @@ export default function App() {
                 {messages.map((msg, index) => {
                   // Skip displaying the default welcome greeting in the timeline to keep it very elegant
                   if (msg.id === 'welcome') return null;
-
-                  const isXyron = msg.sender === 'xyron';
+ 
+                  const isXenova = msg.sender === 'xenova' || msg.sender === 'xyron';
                   return (
                     <motion.div
                       key={msg.id}
@@ -964,7 +1027,7 @@ export default function App() {
                       {/* Content Bubble container - Full Screen on mobile for AI, shrink-to-fit for user */}
                       <div 
                         className={`rounded-[18px] px-4 py-3 shadow-sm ${
-                          !isXyron 
+                          !isXenova 
                             ? 'w-auto max-w-[85%] sm:max-w-[70%] bg-indigo-600 text-white rounded-tr-xs selection:bg-slate-200 selection:text-indigo-900' 
                             : msg.isError 
                               ? 'w-full sm:max-w-[85%] bg-red-950/20 border border-red-900/30 rounded-tl-xs'
@@ -972,7 +1035,7 @@ export default function App() {
                         }`}
                       >
                         {/* User Attachment Render */}
-                        {!isXyron && (msg.attachmentName || msg.attachmentUrl) && (
+                        {!isXenova && (msg.attachmentName || msg.attachmentUrl) && (
                           <div className="mb-3 rounded-xl bg-slate-950/40 p-2 border border-white/5 flex items-center gap-2.5 max-w-full select-none">
                             {msg.attachmentType?.startsWith('image/') && msg.attachmentUrl ? (
                               <div className="relative h-11 w-11 overflow-hidden rounded-lg bg-black/50 border border-white/10 shrink-0">
@@ -996,16 +1059,16 @@ export default function App() {
                             </div>
                           </div>
                         )}
-
+ 
                         {/* Core Response */}
                         <MessageBubbleContent
                           text={msg.text}
-                          isXyron={isXyron}
+                          isXenova={isXenova}
                           isStreaming={msg.isStreaming}
                           msgId={msg.id}
                           onTypewriterComplete={handleTypewriterComplete}
                         />
-
+ 
                         {msg.isError && (
                           <div className="mt-4 pt-3.5 border-t border-red-950/40 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between select-none">
                             <span className="text-[11px] text-red-400 font-semibold leading-relaxed">
@@ -1021,9 +1084,9 @@ export default function App() {
                             </button>
                           </div>
                         )}
-
+ 
                         {/* Grounding Sources / Citations */}
-                        {isXyron && msg.sources && msg.sources.length > 0 && (
+                        {isXenova && msg.sources && msg.sources.length > 0 && (
                           <div className="mt-4 pt-3.5 border-t border-slate-900/80 space-y-2 select-none">
                             <div className="flex items-center gap-1.5 text-slate-400 text-[10.5px] font-bold">
                               <Globe className="h-3 w-3 text-indigo-400" />
@@ -1070,7 +1133,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Xyron Generation Loader indicator without avatar emblem */}
+                {/* Xenova Generation Loader indicator without avatar emblem */}
                 {isPending && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -1080,7 +1143,7 @@ export default function App() {
                     <div className="bg-[#0d1017] border border-slate-900 rounded-[18px] rounded-tl-xs px-4 py-3.5 space-y-2 w-full sm:max-w-[85%] select-none">
                       <div className="flex items-center gap-2">
                         <span className="inline-flex h-1.5 w-1.5 rounded-full bg-indigo-500 animate-ping"></span>
-                        <p className="text-[10px] font-semibold text-slate-450 tracking-wider uppercase font-display">Xyron sedang memproses...</p>
+                        <p className="text-[10px] font-semibold text-slate-450 tracking-wider uppercase font-display">Xenova sedang memproses...</p>
                       </div>
                       <div className="flex items-center gap-1.5 py-1">
                         <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.3s]"></div>
@@ -1228,7 +1291,7 @@ export default function App() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyPress}
                 onFocus={handleInputFocus}
-                placeholder="Tanya Xyron"
+                placeholder="Tanya Xenova"
                 rows={1}
                 disabled={isPending}
                 className="flex-1 bg-transparent border-0 px-3 py-2 text-xs md:text-sm text-slate-100 placeholder-slate-505 focus:outline-none focus:ring-0 resize-none min-h-[40px] max-h-[180px] leading-relaxed font-sans scrollbar-none"

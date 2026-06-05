@@ -1,5 +1,5 @@
 {
-  "name": "Xyron AI Assistant",
+  "name": "Xenova AI Assistant",
   "description": "Professional AI assistant specialized in programming, system architecture, web development, and troubleshooting.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

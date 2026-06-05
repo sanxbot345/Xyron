@@ -1,6 +1,6 @@
-# Panduan Deploy Xyron AI ke Render.com 🚀
+# Panduan Deploy Xenova AI ke Render.com 🚀
 
-Sistem backend dan frontend Xyron telah dioptimalkan secara penuh sehingga **bebas dari error port** saat dijalankan di Render.com. Kami menggunakan bundler `esbuild` yang mengemas server `server.ts` menjadi sebuah berkas CommonJS tunggal dan super-ringan di `dist/server.cjs`, serta mendukung pembacaan port dinamis (`process.env.PORT`) untuk kelancaran *healthcheck* Render.
+Sistem backend dan frontend Xenova telah dioptimalkan secara penuh sehingga **bebas dari error port** saat dijalankan di Render.com. Kami menggunakan bundler `esbuild` yang mengemas server `server.ts` menjadi sebuah berkas CommonJS tunggal dan super-ringan di `dist/server.cjs`, serta mendukung pembacaan port dinamis (`process.env.PORT`) untuk kelancaran *healthcheck* Render.
 
 Berikut adalah panduan langkah-demi-langkah bagi Anda untuk mempublikasikan proyek ini ke Render.com dalam 5 menit.
 
@@ -21,10 +21,10 @@ Berikut adalah panduan langkah-demi-langkah bagi Anda untuk mempublikasikan proy
 
 2. **Koneksikan Repositori**:
    - Hubungkan akun GitHub atau GitLab Anda ke Render.
-   - Pilih repositori yang berisi kode aplikasi Xyron ini.
+   - Pilih repositori yang berisi kode aplikasi Xenova ini.
 
 3. **Konfigurasi Spesifikasi Proyek**:
-   - **Name**: `xyron-ai-assistant` *(atau nama unik bebas lainnya)*.
+   - **Name**: `xenova-ai-assistant` *(atau nama unik bebas lainnya)*.
    - **Region**: Pilih wilayah terdekat dari pengguna Anda (misalnya, **Singapore** untuk efisiensi latensi terbaik di Asia Tenggara).
    - **Branch**: `main` *(atau branch utama repositori Anda)*.
    - **Runtime**: Pilih **Node** (bukan Static Site, karena aplikasi ini full-stack menggunakan Express backend).
@@ -50,7 +50,7 @@ Berikut adalah panduan langkah-demi-langkah bagi Anda untuk mempublikasikan proy
      * **Value**: `production`
      * **Key**: `GEMINI_API_KEY`
      * **Value**: *(Isi dengan API Key Gemini Anda secara rapi)*
-   - *Catatan: Anda tidak perlu mendefinisikan variabel `PORT` di sini. Render akan mengaturnya secara dinamis dan server Xyron otomatis membacanya.*
+   - *Catatan: Anda tidak perlu mendefinisikan variabel `PORT` di sini. Render akan mengaturnya secara dinamis dan server Xenova otomatis membacanya.*
 
 7. **Deploy!**:
    - Gulir ke bawah lalu klik tombol **"Create Web Service"**.

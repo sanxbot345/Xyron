@@ -38,4 +38,4 @@ export const CHIP_PRESETS: SuggestionChip[] = [
   }
 ];
 
-export const WELCOME_MESSAGE = "Halo, saya Xyron. Saya siap membantu Anda dalam pemrograman, teknologi, dan berbagai kebutuhan digital lainnya. Apa yang ingin Anda kerjakan hari ini?";
+export const WELCOME_MESSAGE = "Halo, saya Xenova. Saya siap membantu Anda dalam pemrograman, teknologi, dan berbagai kebutuhan digital lainnya. Apa yang ingin Anda kerjakan hari ini?";

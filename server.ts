@@ -29,11 +29,11 @@ const ai = new GoogleGenAI({
   }
 });
 
-const XYRON_SYSTEM_INSTRUCTION = `
-Anda adalah Xyron, sebuah AI Assistant profesional, cerdas, logis, cepat, sopan, dan sangat komunikatif namun hemat kata.
+const XENOVA_SYSTEM_INSTRUCTION = `
+Anda adalah Xenova, sebuah AI Assistant profesional, cerdas, logis, cepat, sopan, dan sangat komunikatif namun hemat kata.
 
 Identitas AI:
-- Nama: Xyron
+- Nama: Xenova
 - Tipe: Artificial Intelligence Assistant
 - Kepribadian: Cerdas, logis, cepat, sopan, profesional, dan to-the-point (langsung ke inti).
 - Gaya Berbicara: Sangat singkat, padat, dan langsung ke inti jawaban tanpa basa-basi berlebih (no "yapping"). Berikan penjelasan detail hanya jika pertanyaan benar-benar kompleks secara sistem.
@@ -48,7 +48,7 @@ Aturan Perilaku (PENTING):
 `;
 
 // Chat API Endpoint
-app.post("/api/xyron/chat", async (req, res) => {
+app.post("/api/xenova/chat", async (req, res) => {
   try {
     const { message, history, thinking, fileData } = req.body;
 
@@ -156,7 +156,7 @@ app.post("/api/xyron/chat", async (req, res) => {
     });
 
     // Dynamically update system instruction based on selected feature modes
-    let systemInstruction = XYRON_SYSTEM_INSTRUCTION;
+    let systemInstruction = XENOVA_SYSTEM_INSTRUCTION;
 
     if (thinking) {
       systemInstruction += `
@@ -209,7 +209,7 @@ Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
     res.json({ text, sources });
 
   } catch (error: any) {
-    console.error("Xyron Backend API Error:", error);
+    console.error("Xenova Backend API Error:", error);
     
     const errString = String(error.message || "") + String(error.status || "") + JSON.stringify(error);
     const isQuotaExceeded = errString.includes("429") || 
@@ -225,7 +225,7 @@ Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
     }
 
     res.status(500).json({
-      error: error.message || "Terdapat gangguan internal saat menghubungi pusat kalkulasi Xyron.",
+      error: error.message || "Terdapat gangguan internal saat menghubungi pusat kalkulasi Xenova.",
       details: error.status ? `Status API: ${error.status}` : undefined
     });
   }
@@ -249,10 +249,10 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Xyron server is active on http://0.0.0.0:${PORT}`);
+    console.log(`Xenova server is active on http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer().catch((err) => {
-  console.error("Failed to start Xyron server:", err);
+  console.error("Failed to start Xenova server:", err);
 });
