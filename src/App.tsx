@@ -21,7 +21,8 @@ import {
   Globe,
   Film,
   Mic,
-  MicOff
+  MicOff,
+  ArrowUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message, SuggestionChip, ChatSession } from './types';
@@ -227,7 +228,14 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.length > 0) return parsed;
+        if (parsed && parsed.length > 0) {
+          // Reset isStreaming flag on all messages during reload to prevent typing animation repeat
+          const sanitized = parsed.map((s: ChatSession) => ({
+            ...s,
+            messages: s.messages.map(m => m.isStreaming ? { ...m, isStreaming: false } : m)
+          }));
+          return sanitized;
+        }
       } catch (e) {
         console.error('Failed to parse sessions v9', e);
       }
@@ -409,25 +417,14 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showSidebar, setShowSidebar] = useState(false);
 
-  // New States for Plus menu overlay, attachments, and thinking
+  // Plus menu overlay, attachments, and thinking states
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [lastSentFile, setLastSentFile] = useState<File | null>(null);
   const [thinkingModel, setThinkingModel] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  
-  // Repeating state trigger for the header title Xenova
-  const [headerKey, setHeaderKey] = useState(0);
-
-  useEffect(() => {
-    // 6 chars: delay index*0.12s (max 0.6s), duration 0.3s. Total animation completes at 0.9s.
-    // We add 1.6 seconds of readable pause, so the cycle restarts perfectly every 2.5 seconds.
-    const timer = setTimeout(() => {
-      setHeaderKey(prev => prev + 1);
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [headerKey]);
+  const [aiMode, setAiMode] = useState<'fast' | 'code'>('fast');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -532,36 +529,41 @@ export default function App() {
     isPendingRef.current = isPending;
   }, [messages, isPending]);
 
-  // Dynamic Viewport Height management for mobile virtual keyboard
+  // Dynamic Viewport Height & Position management for mobile virtual keyboard
+  const adjustViewport = () => {
+    if (!window.visualViewport) return;
+    const vv = window.visualViewport;
+    const appRoot = document.getElementById('app_root');
+    if (appRoot) {
+      // Pin height and top dynamically to the exact visual viewport bounds (excluding virtual keyboard!)
+      appRoot.style.height = `${vv.height}px`;
+      appRoot.style.top = `${vv.offsetTop}px`;
+    }
+    
+    // Force native mobile browser scroll offset resets
+    window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
+    
+    // Force scroll messages area to the bottom if active conversation exists
+    if (messagesRef.current.length > 1 || isPendingRef.current) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
   useEffect(() => {
     if (!window.visualViewport) return;
 
     const handleViewportResize = () => {
-      const vv = window.visualViewport;
-      if (!vv) return;
-      const appRoot = document.getElementById('app_root');
-      if (appRoot) {
-        // Set height of root dynamically to the actual visual viewport height (excluding keyboard on mobile!)
-        appRoot.style.height = `${vv.height}px`;
-      }
-      
-      // Force scroll reset
-      window.scrollTo(0, 0);
-      document.body.scrollTop = 0;
-      
-      // Re-scroll to bottom of chat ONLY when we have active messages
-      if (messagesRef.current.length > 1 || isPendingRef.current) {
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 80);
-      }
+      adjustViewport();
     };
 
     window.visualViewport.addEventListener('resize', handleViewportResize);
     window.visualViewport.addEventListener('scroll', handleViewportResize);
     
-    // Initial sync
-    handleViewportResize();
+    // Immediate alignment
+    adjustViewport();
 
     return () => {
       window.visualViewport?.removeEventListener('resize', handleViewportResize);
@@ -600,22 +602,11 @@ export default function App() {
   }, [inputText]);
 
   const handleInputFocus = () => {
-    const forceReset = () => {
-      window.scrollTo(0, 0);
-      document.body.scrollTop = 0;
-    };
-    
-    forceReset();
-    setTimeout(forceReset, 40);
-    setTimeout(forceReset, 120);
-    setTimeout(forceReset, 240);
-
-    // When focusing, scroll down smoothly after keyboard has begun transitioning in ONLY when we have active messages
-    if (messages.length > 1 || isPending) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 250);
-    }
+    adjustViewport();
+    // Progressive viewport checks as keyboard animates/slides up
+    setTimeout(adjustViewport, 40);
+    setTimeout(adjustViewport, 120);
+    setTimeout(adjustViewport, 250);
   };
 
   const handleSendMessage = async (customText?: string, customFile?: File | null) => {
@@ -665,6 +656,13 @@ export default function App() {
 
     // Decorate prompt with system directives depending on active modes
     let modifiedPrompt = textToSend || (fileForPrompt ? `Kaji dan analisis file terlampir: ${fileForPrompt.name}` : '');
+    
+    if (aiMode === 'code') {
+      modifiedPrompt += "\n\n[SISTEM MODE CODE: Pengguna mengaktifkan Mode Code & Analisis Pintar. Berikan solusi kode super bersih, berikan ulasan arsitektur mendalam, lakukan analisis komprehensif, pastikan logic bebas bug, serta jelaskan sintaks secara mendetail, terstruktur, dan profesional.]";
+    } else if (aiMode === 'fast') {
+      modifiedPrompt += "\n\n[SISTEM MODE FAST: Pengguna mengaktifkan Mode Fast. Berikan jawaban yang super ringkas, cepat, to-the-point, hilangkan penjelasan yang terlalu bertele-tele agar respon dapat dirender secepat kilat.]";
+    }
+
     if (thinkingModel) {
       modifiedPrompt += "\n\n[SISTEM: Aktifkan mode berpikir mendalam. Sebelum Anda memberikan jawaban final, Anda WAJIB menjabarkan analisis logis, pertimbangan arsitektur, dan rincian penalaran Anda di dalam blok `<think>...</think>` pada bagian awal respon Anda. Lakukan secara detail layaknya reasoning model.]";
     }
@@ -698,6 +696,7 @@ export default function App() {
           // Exclude the last message from history as it's sent as 'message' parameter
           history: messages.slice(1), // skip the welcome greeting to keep context clean
           thinking: thinkingModel,
+          aiMode: aiMode,
           fileData: fileDataPayload
         })
       });
@@ -789,7 +788,7 @@ export default function App() {
     : CHIP_PRESETS.filter(chip => chip.category === selectedCategory);
 
   return (
-    <div className="flex h-full w-full bg-[#090b10] text-slate-100 font-sans overflow-hidden" id="app_root">
+    <div className="flex fixed inset-0 w-full bg-[#090b10] text-slate-100 font-sans overflow-hidden" id="app_root">
       
       {/* 1. SIDEBAR PANEL (Desktop & Collapsible Mobile Grid) */}
       <aside 
@@ -937,7 +936,7 @@ export default function App() {
               <span className="font-sans font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center min-w-[70px]">
                 {Array.from("Xenova").map((char, index) => (
                   <motion.span
-                    key={`${headerKey}-${index}`}
+                    key={`${activeSessionId}-${index}`}
                     initial={{ opacity: 0, scale: 0.6, filter: 'blur(3px)' }}
                     animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
                     transition={{
@@ -1220,71 +1219,9 @@ export default function App() {
               </div>
             )}
 
-            {/* Input Bar composite */}
-            <div className="relative flex items-end gap-2 bg-[#0d1017]/80 backdrop-blur-md border border-slate-900 rounded-[100px] p-1.5 pl-3 focus-within:border-indigo-500/30 focus-within:ring-1 focus-within:ring-indigo-500/20 transition-all duration-200 shadow-inner" id="plus_menu_container">
+            {/* Input Bar composite - Styled dark/black with smaller buttons & paper-plane send icon */}
+            <div className="relative flex flex-col w-full bg-black border border-slate-800 dark:border-slate-900 rounded-[22px] p-3 shadow-xl focus-within:border-indigo-950/50 transition-all duration-250" id="plus_menu_container">
               
-              {/* Plus Button Container with Overlay Menu */}
-              <div className="relative shrink-0 mb-0.5">
-                <button
-                  type="button"
-                  onClick={() => setShowPlusMenu(!showPlusMenu)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200 cursor-pointer active:scale-95 ${
-                    showPlusMenu || attachedFile || thinkingModel
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/15' 
-                      : 'bg-[#131924] hover:bg-slate-950 text-slate-350 hover:text-white border border-slate-900'
-                  }`}
-                  title="Opsi Tambahan"
-                >
-                  <Plus className={`h-5 w-5 transition-transform duration-250 ${showPlusMenu ? 'rotate-45' : ''}`} />
-                </button>
-
-                {/* Popover Menu Overlay */}
-                <AnimatePresence>
-                  {showPlusMenu && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 15, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 15, scale: 0.95 }}
-                      transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="absolute bottom-14 left-0 z-50 w-44 rounded-2xl border border-slate-850 bg-[#0d1017]/95 p-1.5 shadow-xl backdrop-blur-md"
-                    >
-                      {/* FILE OPTION */}
-                      <button
-                        type="button"
-                        onClick={handleFileClick}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-slate-200 hover:bg-slate-900/50 hover:text-white transition-all duration-150 cursor-pointer"
-                      >
-                        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-505/10 text-sky-400">
-                          <FileCode className="h-3.5 w-3.5" />
-                        </div>
-                        <span>File</span>
-                      </button>
-
-                      {/* BERPIKIR OPTION */}
-                      <button
-                        type="button"
-                        onClick={toggleThinking}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition-all duration-150 cursor-pointer ${
-                          thinkingModel 
-                            ? 'bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30' 
-                            : 'text-slate-200 hover:bg-slate-900/50 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`flex h-6 w-6 items-center justify-center rounded-lg ${thinkingModel ? 'bg-indigo-505/20' : 'bg-slate-800/25'} text-indigo-400`}>
-                            <Cpu className="h-3.5 w-3.5 animate-pulse" />
-                          </div>
-                          <span>Berpikir</span>
-                        </div>
-                        {thinkingModel && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse animate-spin-slow" />
-                        )}
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
               <textarea
                 ref={textareaRef}
                 value={inputText}
@@ -1292,32 +1229,153 @@ export default function App() {
                 onKeyDown={handleKeyPress}
                 onFocus={handleInputFocus}
                 placeholder="Tanya Xenova"
-                rows={1}
+                rows={2}
                 disabled={isPending}
-                className="flex-1 bg-transparent border-0 px-3 py-2 text-xs md:text-sm text-slate-100 placeholder-slate-505 focus:outline-none focus:ring-0 resize-none min-h-[40px] max-h-[180px] leading-relaxed font-sans scrollbar-none"
+                className="w-full bg-transparent border-0 px-2 pt-1 pb-2 text-sm md:text-base text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 resize-none min-h-[50px] max-h-[180px] leading-relaxed font-sans scrollbar-none"
               />
 
-              <button
-                type="button"
-                onClick={toggleListening}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all duration-200 cursor-pointer active:scale-95 ${
-                  isListening 
-                    ? 'bg-rose-500 hover:bg-rose-600 text-white border-rose-500 shadow-[0_0_12px_rgba(239,68,68,0.3)]' 
-                    : 'bg-[#131924]/40 hover:bg-[#131924] text-slate-400 hover:text-slate-200 border-slate-900/80 shadow-inner'
-                }`}
-                title={isListening ? "Sedang merekam, klik untuk selesai..." : "Voice to Text"}
-              >
-                <Mic className={`h-4.5 w-4.5 ${isListening ? 'animate-pulse text-white' : ''}`} />
-              </button>
+              {/* Toolbar with divided sections: left side has Fast vs Code, right side has tools */}
+              <div className="flex justify-between items-center mt-2 px-1 pb-0.5">
+                
+                {/* Mode Selector - Mepet ke pinggir kiri */}
+                <div className="flex items-center bg-[#0d1017] p-0.5 rounded-[10px] border border-slate-800/80 select-none">
+                  {/* FAST Button */}
+                  <button
+                    type="button"
+                    onClick={() => setAiMode('fast')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${
+                      aiMode === 'fast'
+                        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
+                    title="Fast: Jawaban cepat & ringkas"
+                  >
+                    <img 
+                      src="/fast.jpg" 
+                      alt="Lightning" 
+                      className="h-3.5 w-3.5 rounded-sm object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    <span>Fast</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => handleSendMessage()}
-                disabled={(!inputText.trim() && !attachedFile) || isPending}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-505 text-white transition-all duration-200 disabled:opacity-30 disabled:hover:bg-indigo-600 disabled:cursor-not-allowed cursor-pointer active:scale-95"
-              >
-                <Send className="h-4.5 w-4.5" />
-              </button>
+                  {/* CODE Button */}
+                  <button
+                    type="button"
+                    onClick={() => setAiMode('code')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${
+                      aiMode === 'code'
+                        ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
+                    title="Code: Analisis cerdas & penulisan kode pintar"
+                  >
+                    <img 
+                      src="/code.jpg" 
+                      alt="VSCode" 
+                      className="h-3.5 w-3.5 rounded-sm object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    <span>Code</span>
+                  </button>
+                </div>
+
+                {/* Right tools (Mic, Plus, Send) */}
+                <div className="flex items-center gap-2">
+                  
+                  {/* Voice microphone button */}
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 ${
+                      isListening 
+                        ? 'bg-rose-500 hover:bg-rose-600 text-white border-rose-500 shadow-md' 
+                        : 'bg-[#0d1017] text-slate-300 border-slate-800/80 hover:bg-slate-900 shadow-sm'
+                    }`}
+                    title={isListening ? "Sedang merekam, klik untuk selesai..." : "Voice to Text"}
+                  >
+                    <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse text-white' : ''}`} />
+                  </button>
+
+                  {/* Plus toggle button representing additional overlay features */}
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowPlusMenu(!showPlusMenu)}
+                      className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 ${
+                        showPlusMenu || attachedFile || thinkingModel
+                          ? 'bg-indigo-650 text-white border-indigo-650' 
+                          : 'bg-[#0d1017] text-slate-300 border-slate-800/80 hover:bg-slate-900 shadow-sm'
+                      }`}
+                      title="Opsi Tambahan"
+                    >
+                      <Plus className={`h-4 w-4 transition-transform duration-250 ${showPlusMenu ? 'rotate-45' : ''}`} />
+                    </button>
+
+                    {/* Popover Menu Overlay inside Light Input Box style */}
+                    <AnimatePresence>
+                      {showPlusMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 12, scale: 0.95 }}
+                          transition={{ duration: 0.15, ease: 'easeOut' }}
+                          className="absolute bottom-11 right-0 z-50 w-44 rounded-2xl border border-slate-800 bg-[#0d1017] p-1.5 shadow-xl backdrop-blur-md"
+                        >
+                          {/* FILE OPTION */}
+                          <button
+                            type="button"
+                            onClick={handleFileClick}
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-slate-200 hover:bg-slate-900 transition-all duration-150 cursor-pointer"
+                          >
+                            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-505/10 text-sky-400">
+                              <FileCode className="h-3.5 w-3.5" />
+                            </div>
+                            <span>File</span>
+                          </button>
+
+                          {/* BERPIKIR OPTION */}
+                          <button
+                            type="button"
+                            onClick={toggleThinking}
+                            className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                              thinkingModel 
+                                ? 'bg-indigo-600/10 text-indigo-455 hover:bg-indigo-600/20' 
+                                : 'text-slate-200 hover:bg-slate-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`flex h-6 w-6 items-center justify-center rounded-lg ${thinkingModel ? 'bg-indigo-505/20' : 'bg-slate-800/25'} text-indigo-400`}>
+                                <Cpu className="h-3.5 w-3.5 animate-pulse" />
+                              </div>
+                              <span>Berpikir</span>
+                            </div>
+                            {thinkingModel && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-indigo-505 animate-pulse" />
+                            )}
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Send Button representing paper-plane */}
+                  <button
+                    type="button"
+                    onClick={() => handleSendMessage()}
+                    disabled={(!inputText.trim() && !attachedFile) || isPending}
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 ${
+                      (!inputText.trim() && !attachedFile) 
+                        ? 'bg-[#0d1017] border-slate-800/60 text-slate-600 cursor-not-allowed opacity-60'
+                        : 'bg-[#0d1017] text-slate-200 border-slate-800 hover:bg-slate-900 shadow-sm'
+                    }`}
+                    title="Kirim Pesan"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+
+                </div>
+              </div>
 
             </div>
           </div>

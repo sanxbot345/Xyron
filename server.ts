@@ -50,7 +50,7 @@ Aturan Perilaku (PENTING):
 // Chat API Endpoint
 app.post("/api/xenova/chat", async (req, res) => {
   try {
-    const { message, history, thinking, fileData } = req.body;
+    const { message, history, thinking, aiMode, fileData } = req.body;
 
     if (!message && !fileData) {
       return res.status(400).json({ error: "Pesan (message) atau file wajib diisi." });
@@ -158,6 +158,21 @@ app.post("/api/xenova/chat", async (req, res) => {
     // Dynamically update system instruction based on selected feature modes
     let systemInstruction = XENOVA_SYSTEM_INSTRUCTION;
 
+    if (aiMode === 'code') {
+      systemInstruction += `
+Aturan Tambahan - MODE CODE & ANALISIS PINTAR AKTIF (PENTING):
+- Berikan solusi kode yang bersih, modular, tangguh, dan terdokumentasi dengan baik.
+- Selesaikan tugas coding secara akurat namun efisien. JANGAN berpikir/reasoning terlalu bertele-tele atau membuat durasi menjadi lambat.
+- Langsung berikan porsi kode yang fungsional dan penjelasan yang ringkas-padat.
+`;
+    } else if (aiMode === 'fast') {
+      systemInstruction += `
+Aturan Tambahan - MODE FAST & TEPAT AKTIF (PENTING):
+- Jawablah pertanyaan pengguna sesingkat, sepadat, dan secepat mungkin!
+- Hilangkan basa-basi pembuka/penutup sepenuhnya. Berikan respon to-the-point agar throughput render sangat cepat dan responsif.
+`;
+    }
+
     if (thinking) {
       systemInstruction += `
 Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
@@ -172,16 +187,26 @@ Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
     }
 
     // Populate generation configs
+    // Lower temperature for code (0.3) makes it deterministic. Fast (0.2) makes it extremely focused.
+    const defaultTemp = aiMode === 'code' ? 0.3 : (aiMode === 'fast' ? 0.2 : 0.7);
     const config: any = {
       systemInstruction: systemInstruction,
-      temperature: thinking ? 0.4 : 0.7, // lower temperature for logical thinking models
+      temperature: thinking ? 0.4 : defaultTemp,
     };
 
-    // Enable deep reasoning / thinkingLevel for Gemini 3 series models if thinking is active
+    // Configure thinking config. To prioritize lower latency:
+    // - If code/fast mode is selected, we limit thinkingLevel to "LOW" rather than "HIGH" to prevent long wait times while keeping it smart.
+    // - If fast mode is selected and thinking is disabled, we set thinkingLevel to "MINIMAL" for raw speed.
     if (thinking) {
       config.thinkingConfig = {
-        thinkingLevel: "HIGH"
+        thinkingLevel: "LOW" // "LOW" level minimizes latency and cost but is still extremely wise and logical
       };
+    } else {
+      if (aiMode === 'fast') {
+        config.thinkingConfig = {
+          thinkingLevel: "MINIMAL" // Direct answers to optimize render time
+        };
+      }
     }
 
     const response = await ai.models.generateContent({
