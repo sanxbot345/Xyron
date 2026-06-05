@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom Scrollbar Styles for elegant UI */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.25) transparent !important;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+input, textarea {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.25) !important;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.45) !important;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Base resets & utilities */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #090b10;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: #f3f4f6;
+}
+
+/* Selection decoration styling */
+::selection {
+  background-color: rgba(99, 102, 241, 0.3);
+  color: #ffffff;
+}
+
