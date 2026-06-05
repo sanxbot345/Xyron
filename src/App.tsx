@@ -524,8 +524,15 @@ export default function App() {
         // Set height of root dynamically to the actual visual viewport height (excluding keyboard on mobile!)
         appRoot.style.height = `${vv.height}px`;
       }
+      
+      // Force scroll reset
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
+      
       // Re-scroll to bottom of chat when viewport changes (e.g. keyboard opens)
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 80);
     };
 
     window.visualViewport.addEventListener('resize', handleViewportResize);
@@ -537,6 +544,21 @@ export default function App() {
     return () => {
       window.visualViewport?.removeEventListener('resize', handleViewportResize);
       window.visualViewport?.removeEventListener('scroll', handleViewportResize);
+    };
+  }, []);
+
+  // Lock window and document scrolls to prevent automatic shifting/panning by browsers on mobile
+  useEffect(() => {
+    const preventWindowScroll = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+    
+    window.addEventListener('scroll', preventWindowScroll, { passive: true });
+    
+    return () => {
+      window.removeEventListener('scroll', preventWindowScroll);
     };
   }, []);
 
@@ -554,6 +576,16 @@ export default function App() {
   }, [inputText]);
 
   const handleInputFocus = () => {
+    const forceReset = () => {
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
+    };
+    
+    forceReset();
+    setTimeout(forceReset, 40);
+    setTimeout(forceReset, 120);
+    setTimeout(forceReset, 240);
+
     // When focusing, scroll down smoothly after keyboard has begun transitioning in
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
