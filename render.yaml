@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: xyron-ai-assistant
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false
+        placeholder: "Masukkan API Key Gemini Anda dari Google AI Studio"
