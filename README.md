@@ -1,11 +1,73 @@
-<div align="center">
+Xyron
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+<div align="center">""Google Studio Build" (https://img.shields.io/badge/Google%20Studio-Build-4285F4?style=for-the-badge&logo=google&logoColor=white)" (URL_LINK_GOOGLE_STUDIO_KAMU)
+""License: MIT" (https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)" (https://opensource.org/licenses/MIT)
 
-  <h1>Built with AI Studio</h2>
+Deskripsi Proyek
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+Deskripsi singkat, padat, dan jelas mengenai proyek yang sedang kamu kembangkan. Jelaskan tujuan utama proyek, masalah yang diselesaikan, serta manfaat yang diberikan kepada pengguna.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+</div>---
+
+🚀 Memulai (Getting Started)
+
+Ikuti langkah-langkah berikut untuk menjalankan proyek ini di perangkat lokal.
+
+📋 Prasyarat
+
+Pastikan telah menginstal:
+
+- Google Studio
+- Git
+- Code Editor (VS Code / Acode)
+- Node.js (jika diperlukan)
+
+📥 Clone Repository
+
+git clone https://github.com/username/nama-repo.git
+cd nama-repo
+
+📦 Install Dependencies
+
+npm install
+
+▶️ Jalankan Project
+
+npm start
+
+atau
+
+npm run dev
+
+---
+
+📸 Preview
+
+Tambahkan screenshot atau banner proyek di sini.
+
+![Preview](assets/preview.png)
+
+---
+
+🔗 Tautan Penting
+
+- Google Studio: URL_LINK_GOOGLE_STUDIO_KAMU
+- Repository: https://github.com/username/nama-repo
+
+---
+
+👨‍💻 Developer
+
+Dikembangkan oleh Nama Kamu
+
+---
+
+📄 Lisensi
+
+Project ini menggunakan lisensi MIT License. Lihat file "LICENSE" untuk informasi lebih lanjut.
+
+---
+
+<div align="center">⭐ Jangan lupa berikan Star jika proyek ini bermanfaat!
 
 </div>
