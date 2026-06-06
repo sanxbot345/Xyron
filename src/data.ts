@@ -4,38 +4,39 @@ export const CHIP_PRESETS: SuggestionChip[] = [
   {
     id: 'prog-1',
     category: 'programming',
-    label: 'Buat Fungsi Clean Code',
+    label: 'Write Clean Code Function',
     shortLabel: 'Clean Code',
-    prompt: 'Tolong buatkan sebuah fungsi utilitas TypeScript yang bersih, efisien, dan aman untuk memvalidasi input email dan nomor telepon Indonesia.'
+    prompt: 'Please write a clean, efficient, and type-safe TypeScript utility function to validate email inputs and standard telephone number formats.'
   },
   {
     id: 'debug-1',
     category: 'debugging',
-    label: 'Analisis & Temukan Bug',
-    shortLabel: 'Analisis Bug',
-    prompt: 'Berikut adalah kode React saya yang mengalami memory leak karena useEffect. Tolong analisis dan perbaiki kodenya agar efisien:\n\n```jsx\nuseEffect(() => {\n  const interval = setInterval(() => {\n    fetchData();\n  }, 1000);\n}, []);\n```'
+    label: 'Analyze & Fix Bug',
+    shortLabel: 'Fix Bug',
+    prompt: 'Here is my React code which has a potential memory leak or infinite re-render inside useEffect. Please analyze and fix it:\n\n```jsx\nuseEffect(() => {\n  const interval = setInterval(() => {\n    fetchData();\n  }, 1000);\n}, []);\n```'
   },
   {
     id: 'arch-1',
     category: 'architecture',
-    label: 'Rancang Arsitektur Berbasis Node.js',
-    shortLabel: 'Arsitektur API',
-    prompt: 'Saya ingin merancang arsitektur REST API menggunakan Express dan PostgreSQL yang aman, modular, dan mendukung skalabilitas tinggi. Berikan skema direktori dan folder terbaik.'
+    label: 'Design Node.js API Architecture',
+    shortLabel: 'API Architecture',
+    prompt: 'I want to design a secure, modular REST API architecture using Node.js, Express, and PostgreSQL that supports high scalability. Provide a directory structure and best practices.'
   },
   {
     id: 'edu-1',
     category: 'education',
-    label: 'Jelaskan Konsep Asynchronous JS',
-    shortLabel: 'Konsep Async/Await',
-    prompt: 'Jelaskan konsep Asynchronous, Promise, dan Async/Await dalam JavaScript dengan cara yang sederhana, bertahap, dan mudah dipahami oleh pemula.'
+    label: 'Explain Asynchronous Concepts',
+    shortLabel: 'Async JS Concept',
+    prompt: 'Explain the concepts of Asynchronous operations, Promises, and Async/Await in JavaScript in a simple, step-by-step manner suitable for beginners.'
   },
   {
     id: 'bot-1',
     category: 'bot',
-    label: 'Rancangan Bot WhatsApp Node.js',
-    shortLabel: 'Bot WhatsApp',
-    prompt: 'Tolong jelaskan langkah demi langkah membuat bot WhatsApp sederhana berbasis Node.js menggunakan library whatsapp-web.js untuk auto-reply pesan tanya-jawab.'
+    label: 'Design a Telegram Bot',
+    shortLabel: 'Telegram Bot',
+    prompt: 'Can you show me a step-by-step guide to building a simple, responsive Telegram Bot in Node.js using node-telegram-bot-api to handle auto-replies?'
   }
 ];
 
-export const WELCOME_MESSAGE = "Halo, saya Xenova. Saya siap membantu Anda dalam pemrograman, teknologi, dan berbagai kebutuhan digital lainnya. Apa yang ingin Anda kerjakan hari ini?";
+export const WELCOME_MESSAGE = "Hello! I am Vexon, your professional AI Assistant. I am ready to help you with programming, debugging, architecture, and script creation. What would you like us to build today?";
+

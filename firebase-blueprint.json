@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Message": {
+      "title": "Message",
+      "description": "Struktur dari pesan obrolan individual",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sender": { "type": "string", "enum": ["user", "xenova", "xyron", "vexon"] },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "isError": { "type": "boolean" },
+        "sources": {
+          "type": "array",
+          "description": "Referensi pencarian sumber materi"
+        }
+      },
+      "required": ["id", "sender", "text", "timestamp"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "Representasi dari satu sesi obrolan multi-turn",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "description": "Koleksi daftar pesan dalam obrolan"
+        },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "title", "messages", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": "ChatSession",
+      "description": "Sesi chat yang disinkronisasi ke Google Firebase Firestore"
+    }
+  }
+}

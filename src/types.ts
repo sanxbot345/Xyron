@@ -5,7 +5,7 @@ export interface GroundingSource {
 
 export interface Message {
   id: string;
-  sender: 'user' | 'xenova' | 'xyron';
+  sender: 'user' | 'xenova' | 'xyron' | 'vexon';
   text: string;
   timestamp: number;
   isPending?: boolean;

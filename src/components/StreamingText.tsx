@@ -12,18 +12,21 @@ export function StreamingText({ text, onComplete }: StreamingTextProps) {
   textRef.current = text;
 
   useEffect(() => {
-    // Elegant typewriter effect: types character groups / small words in very fast, smooth ticks.
-    // Splitting by space characters gives a beautiful word-by-word flow that is identical to top-tier AI chat frameworks.
+    // Split by spaces into word chunks
     const words = textRef.current.split(' ');
     let currentIndex = 0;
     setDisplayedText('');
 
     let timeoutId: any;
 
+    // Adaptive chunking: small messages scroll fine-grained, 
+    // while long scripts scale chunk sizes so rendering finishes in ~35-45 ticks (under 1s).
+    // This maintains a constant speed and avoids browser CPU bottlenecks from rendering heavy Markdown repeatedly.
+    const targetTicks = 40; 
+    const chunkLength = Math.max(2, Math.ceil(words.length / targetTicks));
+
     const stream = () => {
       if (currentIndex < words.length) {
-        // Smoothly send chunks of 1-2 words at a very snappy rate
-        const chunkLength = words[currentIndex].length > 15 ? 1 : 2;
         const nextWords = words.slice(currentIndex, currentIndex + chunkLength).join(' ');
         setDisplayedText(prev => prev + (prev ? ' ' : '') + nextWords);
         currentIndex += chunkLength;
@@ -37,8 +40,8 @@ export function StreamingText({ text, onComplete }: StreamingTextProps) {
           });
         }
 
-        // Varied human-like sub-50ms typing delay
-        const delay = Math.random() * 15 + 15; // 15-30ms
+        // Fast typing speed (10-20ms)
+        const delay = Math.random() * 10 + 10; 
         timeoutId = setTimeout(stream, delay);
       } else {
         setDisplayedText(textRef.current);

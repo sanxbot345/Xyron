@@ -3,11 +3,34 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
+import fs from "fs";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+// Safe lazy Firebase/Firestore connection helper
+let firebaseApp: any = null;
+let db: any = null;
+let firebaseConnected = false;
+
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    firebaseConnected = true;
+    console.log("✅ Berhasil terhubung ke database Google Firebase Firestore.");
+  } else {
+    console.log("Peringatan: firebase-applet-config.json tidak ditemukan. Mode simpan lokal aktif.");
+  }
+} catch (error) {
+  console.error("❌ Gagal terhubung ke Firebase:", error);
+}
 
 // Set payload filters to support modern rich multimedia file uploads
 app.use(express.json({ limit: "50mb" }));
@@ -29,26 +52,111 @@ const ai = new GoogleGenAI({
   }
 });
 
-const XENOVA_SYSTEM_INSTRUCTION = `
-Anda adalah Xenova, sebuah AI Assistant profesional, cerdas, logis, cepat, sopan, dan sangat komunikatif namun hemat kata.
+const VEXON_SYSTEM_INSTRUCTION = `
+Identity & Personality:
+- Name: Vexon
+- Type: Conversational AI Assistant
+- Personality: Warm, natural, extremely human-like, helpful, empathetic, and professional. Speak in an authentic, flowing, conversational, and non-robotic tone. Avoid overly structured or dry formulas where possible.
+- Default Language: English. Always converse in English unless the user writes/starts the conversation in another language.
+- Dynamic Language Adaptation (CRITICAL): Always matching the language of the user. Automatically detect and mirror the EXACT language used by the user in their active message. For example:
+  * If the user writes in Indonesian (e.g., "haloo"), respond naturally and completely in friendly, fluent, warm Indonesian (e.g., "iya, halo! Ada yang bisa aku bantu?").
+  * If the user writes in Javanese / Boso Jowo (e.g., "piye kabare", "tulung gawekno..."), respond in fluent, native, natural Javanese (Boso Jowo Ngoko or Jowo Kromo, e.g., "halo cak/mbak! piye, opo sing iso tak bantu?").
+  * If the user writes in Spanish, respond in fluent, warm Spanish.
+  * If the user writes in English, respond in natural English.
 
-Identitas AI:
-- Nama: Xenova
-- Tipe: Artificial Intelligence Assistant
-- Kepribadian: Cerdas, logis, cepat, sopan, profesional, dan to-the-point (langsung ke inti).
-- Gaya Berbicara: Sangat singkat, padat, dan langsung ke inti jawaban tanpa basa-basi berlebih (no "yapping"). Berikan penjelasan detail hanya jika pertanyaan benar-benar kompleks secara sistem.
-- Bahasa Utama: Bahasa Indonesia, namun fluent dalam Bahasa Inggris dan bahasa lain.
-
-Aturan Perilaku (PENTING):
-1. JANGAN BANYAK BASA-BASI ATAU YAPPING. Kurangi kata sambutan pembuka atau penutup yang repetitif. Langsung berikan solusi/kode/jawaban inti.
-2. Selalu utamakan akurasi ilmiah/teknis dan kejelasan tinggi. Jangan pernah mengarang informasi/library palsu.
-3. Selalu jelaskan alasan logis singkat di balik saran teknis.
-4. Prioritaskan faktor keamanan, performa tinggi, dan kemudahan perawatan (maintainability) dalam setiap kode.
-5. Format setiap kode snippet dengan markdown lengkap (\`\`\`typescript, \`\`\`python, dll.) dengan komentar yang informatif tapi efisien.
+Behavioral Guidelines:
+1. Singkat, Padat & To-The-Point (CRITICAL / UTAMA): Selalu berikan jawaban yang singkat, langsung pada intinya, dan minim penjelasan yang panjang lebar atau bertele-tele. Jawab secara minimalis tapi berbobot tinggi.
+2. Natural & Fluent (No Robot Talk): Maintain a natural human pacing and tone without robotic transitions, formulaic greeting clichés, or redundant automated.
+3. Direct, Swift & Crisp (Speed Optimized): Respond extremely fast by cutting down on warmups, excessive explanations, or repetitive descriptions before and after the code. Deliver the code directly.
+4. Bug-free & Accurate Code (No Errors): Ensure code is fully functional, complete, and syntactically correct. Do not use placeholders (e.g. '// write your logic here').
+5. Format code using appropriate markdown backticks with precise, helpful comments.
 `;
 
+// Firebase Firestore Sessions API Routes
+// 1. GET /api/sessions - Get all sessions from Firebase Firestore
+app.get("/api/sessions", async (req, res) => {
+  try {
+    if (!firebaseConnected || !db) {
+      return res.json({ 
+        sessions: [], 
+        firebaseConnected: false, 
+        message: "Firebase tidak terhubung. Menggunakan penyimpanan lokal browser." 
+      });
+    }
+
+    const sessionsCol = collection(db, "sessions");
+    const snapshot = await getDocs(sessionsCol);
+    const dbSessions: any[] = [];
+    snapshot.forEach((docSnap) => {
+      dbSessions.push(docSnap.data());
+    });
+
+    // Sort by timestamp descending
+    dbSessions.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    res.json({ sessions: dbSessions, firebaseConnected: true });
+  } catch (error: any) {
+    console.error("Gagal mengambil session dari Firebase:", error);
+    res.status(500).json({ error: "Gagal memproses riwayat dari database Firebase." });
+  }
+});
+
+// 2. POST /api/sessions/sync - Batch sync sessions to Firebase Firestore
+app.post("/api/sessions/sync", async (req, res) => {
+  try {
+    if (!firebaseConnected || !db) {
+      return res.json({ 
+        success: false, 
+        firebaseConnected: false, 
+        message: "Firebase tidak terhubung. Sinkronisasi dilewati." 
+      });
+    }
+
+    const { sessions } = req.body;
+    if (!sessions || !Array.isArray(sessions)) {
+      return res.status(400).json({ error: "Data sessions tidak valid." });
+    }
+
+    // Save each active session to Firebase
+    for (const s of sessions) {
+      if (!s.id) continue;
+      const sessionDocRef = doc(db, "sessions", s.id);
+      await setDoc(sessionDocRef, {
+        id: s.id,
+        title: s.title || "New Chat",
+        messages: s.messages || [],
+        timestamp: s.timestamp || Date.now()
+      });
+    }
+
+    // Delete sessions in DB that are no longer part of active client state (sync deletions)
+    const activeIds = sessions.map((s: any) => s.id);
+    const sessionsCol = collection(db, "sessions");
+    const snapshot = await getDocs(sessionsCol);
+    for (const docSnap of snapshot.docs) {
+      const docId = docSnap.id;
+      if (!activeIds.includes(docId)) {
+        await deleteDoc(doc(db, "sessions", docId));
+      }
+    }
+
+    res.json({ success: true, firebaseConnected: true });
+  } catch (error: any) {
+    console.error("Gagal menyinkronkan chat session ke Firebase:", error);
+    res.status(500).json({ error: "Gagal menyimpan riwayat ke database Firebase." });
+  }
+});
+
+// 3. GET /api/sessions/status - Get Firebase connection status
+app.get("/api/sessions/status", (req, res) => {
+  res.json({
+    firebaseConnected,
+    hasConfig: !!firebaseApp
+  });
+});
+
 // Chat API Endpoint
-app.post("/api/xenova/chat", async (req, res) => {
+app.post("/api/vexon/chat", async (req, res) => {
   try {
     const { message, history, thinking, aiMode, fileData } = req.body;
 
@@ -156,7 +264,7 @@ app.post("/api/xenova/chat", async (req, res) => {
     });
 
     // Dynamically update system instruction based on selected feature modes
-    let systemInstruction = XENOVA_SYSTEM_INSTRUCTION;
+    let systemInstruction = VEXON_SYSTEM_INSTRUCTION;
 
     if (aiMode === 'code') {
       systemInstruction += `
@@ -234,7 +342,7 @@ Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
     res.json({ text, sources });
 
   } catch (error: any) {
-    console.error("Xenova Backend API Error:", error);
+    console.error("Vexon Backend API Error:", error);
     
     const errString = String(error.message || "") + String(error.status || "") + JSON.stringify(error);
     const isQuotaExceeded = errString.includes("429") || 
@@ -250,7 +358,7 @@ Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
     }
 
     res.status(500).json({
-      error: error.message || "Terdapat gangguan internal saat menghubungi pusat kalkulasi Xenova.",
+      error: error.message || "Terdapat gangguan internal saat menghubungi pusat kalkulasi Vexon.",
       details: error.status ? `Status API: ${error.status}` : undefined
     });
   }
@@ -274,10 +382,10 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Xenova server is active on http://0.0.0.0:${PORT}`);
+    console.log(`Vexon server is active on http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer().catch((err) => {
-  console.error("Failed to start Xenova server:", err);
+  console.error("Failed to start Vexon server:", err);
 });

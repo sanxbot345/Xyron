@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net untuk menolak akses yang tidak didefinisikan secara eksplisit
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper validasi ID pencegah ID Poisoning
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+    }
+
+    // Helper data request instan
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Fungsi validasi integritas struktur ChatSession
+    function isValidChatSession(data) {
+      return data.id is string
+        && isValidId(data.id)
+        && data.title is string
+        && data.title.size() <= 1000
+        && data.timestamp is number
+        && data.messages is list
+        && data.messages.size() <= 2500;
+    }
+
+    // Rule untuk koleksi sessions
+    match /sessions/{sessionId} {
+      allow get, delete: if isValidId(sessionId);
+      allow list: if true;
+      allow create: if isValidId(sessionId) && isValidChatSession(incoming());
+      allow update: if isValidId(sessionId) 
+        && incoming().id == resource.data.id 
+        && isValidChatSession(incoming());
+    }
+  }
+}

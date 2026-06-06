@@ -107,13 +107,13 @@ function StreamingThinkingText({ text, onComplete }: StreamingThinkingTextProps)
 
 interface MessageBubbleContentProps {
   text: string;
-  isXenova: boolean;
+  isVexon: boolean;
   isStreaming?: boolean;
   msgId: string;
   onTypewriterComplete: (id: string) => void;
 }
 
-function MessageBubbleContent({ text, isXenova, isStreaming, msgId, onTypewriterComplete }: MessageBubbleContentProps) {
+function MessageBubbleContent({ text, isVexon, isStreaming, msgId, onTypewriterComplete }: MessageBubbleContentProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const { thought, content } = parseThoughtAndContent(text ?? "");
   const [thoughtFinished, setThoughtFinished] = useState(false);
@@ -141,10 +141,10 @@ function MessageBubbleContent({ text, isXenova, isStreaming, msgId, onTypewriter
           >
             <div className="flex items-center gap-2">
               <Cpu className="h-3.5 w-3.5 animate-spin-slow text-indigo-400" />
-              <span>{isStreaming && !thoughtFinished ? "Sedang Berpikir..." : "Proses Berpikir"}</span>
+              <span>{isStreaming && !thoughtFinished ? "Thinking..." : "Thought Process"}</span>
             </div>
             <span className="text-[10px] text-indigo-500 font-medium font-sans">
-              {isExpanded ? "Sembunyikan" : "Tampilkan"}
+              {isExpanded ? "Hide" : "Show"}
             </span>
           </button>
           
@@ -193,7 +193,7 @@ function MessageBubbleContent({ text, isXenova, isStreaming, msgId, onTypewriter
   }
 
   // Fallback if no thought block is present
-  return isXenova ? (
+  return isVexon ? (
     isStreaming ? (
       <StreamingText 
         text={text} 
@@ -245,7 +245,7 @@ export default function App() {
     let initialMessages: Message[] = [
       {
         id: 'welcome',
-        sender: 'xenova',
+        sender: 'vexon',
         text: WELCOME_MESSAGE,
         timestamp: Date.now()
       }
@@ -377,10 +377,69 @@ export default function App() {
     }
   };
 
-  // Sync sessions to localStorage
+  const [firebaseStatus, setFirebaseStatus] = useState<{ firebaseConnected: boolean; hasConfig: boolean }>({
+    firebaseConnected: false,
+    hasConfig: false
+  });
+
+  // Sync sessions to localStorage and Firebase Firestore via server
   useEffect(() => {
     localStorage.setItem('xyron_sessions_v9', JSON.stringify(sessions));
+
+    const syncToFirebase = async () => {
+      try {
+        const res = await fetch('/api/sessions/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessions })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setFirebaseStatus({
+            firebaseConnected: !!data.firebaseConnected,
+            hasConfig: data.firebaseConnected !== undefined
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to sync history with Firebase Firestore:", err);
+      }
+    };
+
+    const timer = setTimeout(syncToFirebase, 800);
+    return () => clearTimeout(timer);
   }, [sessions]);
+
+  // Load sessions and connection status from Firebase Firestore on mount
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const res = await fetch('/api/sessions');
+        if (res.ok) {
+          const data = await res.json();
+          setFirebaseStatus({
+            firebaseConnected: !!data.firebaseConnected,
+            hasConfig: data.firebaseConnected !== undefined
+          });
+
+          if (data && data.firebaseConnected && data.sessions && data.sessions.length > 0) {
+            const sanitized = data.sessions.map((s: ChatSession) => ({
+              ...s,
+              messages: s.messages.map(m => m.isStreaming ? { ...m, isStreaming: false } : m)
+            }));
+            setSessions(sanitized);
+
+            const hasActive = sanitized.some((s: ChatSession) => s.id === activeSessionId);
+            if (!hasActive && sanitized.length > 0) {
+              setActiveSessionId(sanitized[0].id);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Gagal mengambil history dari Firebase:', err);
+      }
+    };
+    fetchInitialData();
+  }, []);
 
   // Sync activeSessionId to localStorage
   useEffect(() => {
@@ -540,15 +599,17 @@ export default function App() {
       appRoot.style.top = `${vv.offsetTop}px`;
     }
     
-    // Force native mobile browser scroll offset resets
-    window.scrollTo(0, 0);
-    document.body.scrollTop = 0;
+    // Only scroll parent window back to top if it actually shifted, avoids layout/rendering feedback loop
+    if (window.scrollY !== 0 || window.scrollX !== 0) {
+      window.scrollTo(0, 0);
+    }
+    if (document.body.scrollTop !== 0) {
+      document.body.scrollTop = 0;
+    }
     
-    // Force scroll messages area to the bottom if active conversation exists
+    // Force scroll messages area to the bottom instantly to avoid animating scroll fights
     if (messagesRef.current.length > 1 || isPendingRef.current) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }
   };
 
@@ -560,18 +621,16 @@ export default function App() {
     };
 
     window.visualViewport.addEventListener('resize', handleViewportResize);
-    window.visualViewport.addEventListener('scroll', handleViewportResize);
     
     // Immediate alignment
     adjustViewport();
 
     return () => {
       window.visualViewport?.removeEventListener('resize', handleViewportResize);
-      window.visualViewport?.removeEventListener('scroll', handleViewportResize);
     };
   }, []);
 
-  // Lock window and document scrolls to prevent automatic shifting/panning by browsers on mobile
+  // Lock window and document scrolls gently to prevent automatic shifting/panning by mobile browsers on input focus
   useEffect(() => {
     const preventWindowScroll = () => {
       if (window.scrollY !== 0 || window.scrollX !== 0) {
@@ -586,10 +645,10 @@ export default function App() {
     };
   }, []);
 
-  // Sync scroll on new messages or typing state changes ONLY when we have active messages
+  // Sync scroll on new messages or typing state changes instantly (no smooth-scroll feedback collision)
   useEffect(() => {
     if (messages.length > 1 || isPending) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }
   }, [messages, isPending]);
 
@@ -686,7 +745,7 @@ export default function App() {
         }
       }
 
-      const response = await fetch('/api/xenova/chat', {
+      const response = await fetch('/api/vexon/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -704,19 +763,19 @@ export default function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Terjadi kesalahan sistem saat menghubungi Xenova.');
+        throw new Error(data.error || 'Terjadi kesalahan sistem saat menghubungi Vexon.');
       }
 
-      const xenovaMsg: Message = {
-        id: `xenova-${Date.now()}`,
-        sender: 'xenova',
+      const vexonMsg: Message = {
+        id: `vexon-${Date.now()}`,
+        sender: 'vexon',
         text: data.text,
         timestamp: Date.now(),
         isStreaming: true,
         sources: data.sources
       };
 
-      setMessages(prev => [...prev, xenovaMsg]);
+      setMessages(prev => [...prev, vexonMsg]);
 
     } catch (error: any) {
       console.error('Chat error:', error);
@@ -724,8 +783,8 @@ export default function App() {
       
       const errorMsg: Message = {
         id: `error-${Date.now()}`,
-        sender: 'xenova',
-        text: `⚠️ **Gagal memuat respons**\n\n${error.message || 'Gagal tersambung dengan server otak Xenova.'}\n\n*Silakan coba kirim ulang masukan Anda.*`,
+        sender: 'vexon',
+        text: `⚠️ **Gagal memuat respons**\n\n${error.message || 'Gagal tersambung dengan server otak Vexon.'}\n\n*Silakan coba kirim ulang masukan Anda.*`,
         timestamp: Date.now(),
         isError: true
       };
@@ -742,11 +801,11 @@ export default function App() {
   };
 
   const clearChatHistory = () => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus seluruh riwayat percakapan dengan Xenova?')) {
+    if (window.confirm('Apakah Anda yakin ingin menghapus seluruh riwayat percakapan dengan Vexon?')) {
       const initialChat: Message[] = [
         {
           id: 'welcome',
-          sender: 'xenova',
+          sender: 'vexon',
           text: WELCOME_MESSAGE,
           timestamp: Date.now()
         }
@@ -775,12 +834,12 @@ export default function App() {
   };
 
   const categories = [
-    { value: 'all', label: 'Semua Fitur' },
-    { value: 'programming', label: 'Clean Code' },
-    { value: 'debugging', label: 'Bug Fix' },
-    { value: 'architecture', label: 'Arsitektur' },
-    { value: 'education', label: 'Edukasi' },
-    { value: 'bot', label: 'Bot & API' }
+    { value: 'all', label: 'All Features' },
+    { value: 'programming', label: 'Programming' },
+    { value: 'debugging', label: 'Debugging' },
+    { value: 'architecture', label: 'Architecture' },
+    { value: 'education', label: 'Education' },
+    { value: 'bot', label: 'Bots & APIs' }
   ];
 
   const filteredChips = selectedCategory === 'all' 
@@ -802,15 +861,15 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 overflow-hidden items-center justify-center rounded-xl border border-slate-800 bg-[#0d1017]/80 shadow-md">
               <img 
-                src="/xyron.jpg" 
-                alt="Xenova Logo" 
+                src="https://i.imgur.com/eUfx6Xy.png" 
+                alt="Vexon Logo" 
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
               />
             </div>
             <div>
               <h1 className="font-display text-lg font-bold tracking-tight text-white flex items-center gap-1.5 font-sans">
-                XENOVA
+                VEXON
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -836,14 +895,14 @@ export default function App() {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-550 text-white shadow-md shadow-indigo-600/10 px-4 py-2.5 text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer active:scale-98 select-none"
             >
               <Plus className="h-4 w-4 shrink-0" />
-              <span>Obrolan Baru</span>
+              <span>New Chat</span>
             </button>
           </div>
 
           {/* Session List */}
           <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1.5 scrollbar-thin scrollbar-transparent">
             <div className="px-3 mb-2 shrink-0">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Riwayat Chat</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Chat History</span>
             </div>
 
             {sessions.filter(s => s.messages.some(m => m.sender === 'user')).map(s => {
@@ -869,7 +928,7 @@ export default function App() {
                   <button
                     onClick={(e) => deleteSession(s.id, e)}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-red-950/30 hover:text-red-400 text-slate-500 transition-all cursor-pointer duration-150 relative z-10 shrink-0"
-                    title="Hapus Obrolan"
+                    title="Delete Chat"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -877,6 +936,27 @@ export default function App() {
               );
             })}
           </div>
+        </div>
+
+        {/* Firebase Connection Status Indicator */}
+        <div className="p-4 border-t border-slate-950 bg-slate-900/10 text-[11px] shrink-0 flex items-center justify-between select-none">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${
+              firebaseStatus.firebaseConnected 
+                ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' 
+                : firebaseStatus.hasConfig 
+                  ? 'bg-indigo-500/40 shadow-[0_0_8px_rgba(99,102,241,0.2)] animate-pulse'
+                  : 'bg-indigo-500/20 shadow-[0_0_8px_rgba(99,102,241,0.1)]'
+            }`} />
+            <span className="truncate text-slate-400 font-sans font-medium text-[11px]">
+              {firebaseStatus.firebaseConnected 
+                ? 'Firebase Firestore Connected' 
+                : 'Firebase Offline (Local Active)'}
+            </span>
+          </div>
+          {firebaseStatus.firebaseConnected && (
+            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-md font-bold uppercase shrink-0">Synced</span>
+          )}
         </div>
       </aside>
 
@@ -909,14 +989,14 @@ export default function App() {
         }}
       >
         
-        {/* Top Header Bar with Typewriter Xenova Accent */}
+        {/* Top Header Bar with Typewriter Vexon Accent */}
         <header className="flex h-16 items-center justify-between px-4 sm:px-6 border-b border-slate-900 bg-[#0d1017]/50 backdrop-blur-md select-none shrink-0 z-10">
           <div className="flex items-center gap-3">
             {/* Sidebar toggle button inside the header */}
             <button
               onClick={() => setShowSidebar(prev => !prev)}
               className="p-2 -ml-2 rounded-xl text-slate-400 hover:bg-slate-950 hover:text-white transition-all cursor-pointer relative"
-              title={showSidebar ? "Tutup Menu" : "Buka Menu"}
+              title={showSidebar ? "Close Menu" : "Open Menu"}
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -924,17 +1004,17 @@ export default function App() {
             {/* Logo next to header name */}
             <div className="flex h-8 w-8 overflow-hidden items-center justify-center rounded-lg border border-slate-800 bg-[#0d1017]/80 shadow-md">
               <img 
-                src="/xyron.jpg" 
-                alt="Xenova Logo" 
+                src="https://i.imgur.com/eUfx6Xy.png" 
+                alt="Vexon Logo" 
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
               />
             </div>
             
-            {/* Header Text Xenova without animated cursor */}
+            {/* Header Text Vexon without animated cursor */}
             <div className="flex items-center gap-2">
               <span className="font-sans font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center min-w-[70px]">
-                {Array.from("Xenova").map((char, index) => (
+                {Array.from("Vexon").map((char, index) => (
                   <motion.span
                     key={`${activeSessionId}-${index}`}
                     initial={{ opacity: 0, scale: 0.6, filter: 'blur(3px)' }}
@@ -974,9 +1054,9 @@ export default function App() {
                   <FileCode className="h-7 w-7" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-100 mb-1">Letakkan File Anda di Sini</h3>
+                  <h3 className="text-sm font-bold text-slate-100 mb-1">Drop Your File Here</h3>
                   <p className="text-[11px] leading-relaxed text-slate-450">
-                    Xenova akan melampirkan berkas, dokumen, gambar, atau kode ini ke dalam sesi obrolan Anda secara otomatis.
+                    Vexon will automatically attach this file, document, image, or code to your chat session.
                   </p>
                 </div>
               </div>
@@ -995,17 +1075,103 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.35, ease: 'easeOut' }}
-                className="max-w-2xl mx-auto py-6 sm:py-16 md:py-24 text-center space-y-4 sm:space-y-8 px-4"
+                className="max-w-2xl mx-auto py-4 sm:py-12 md:py-16 text-center space-y-6 sm:space-y-8 px-4"
               >
+                {/* Brand Logo & Name under logo */}
+                <div className="flex flex-col items-center justify-center space-y-3 mb-2">
+                  <div className="relative h-20 w-20 overflow-hidden rounded-[24px] bg-black border border-slate-800 shadow-2xl p-1 shrink-0">
+                    <img
+                      src="https://i.imgur.com/eUfx6Xy.png"
+                      alt="Vexon"
+                      className="h-full w-full rounded-[20px] object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <h1 className="font-display text-2xl font-black tracking-[0.25em] text-white">
+                    VEXON
+                  </h1>
+                </div>
+
                 {/* Minimalist typography header */}
                 <div className="space-y-3">
-                  <h2 className="font-display text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-450 bg-clip-text text-transparent">
-                    Saya Xenova, Ada yang bisa saya bantu?
+                  <h2 className="font-display text-xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent flex flex-wrap justify-center gap-x-[0.25em] gap-y-1">
+                    {"I am Vexon, how can I help you today?".split(" ").map((word, wIdx) => (
+                      <motion.span
+                        key={wIdx}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ 
+                          opacity: [0, 1, 1, 0],
+                          y: [8, 0, 0, -4]
+                        }}
+                        transition={{
+                          duration: 4.5,
+                          repeat: Infinity,
+                          repeatType: "loop",
+                          delay: wIdx * 0.12,
+                          times: [0, 0.08, 0.88, 1],
+                          ease: "easeInOut"
+                        }}
+                        className="inline-block"
+                      >
+                        {word}
+                      </motion.span>
+                    ))}
                   </h2>
-                  <p className="text-[11px] sm:text-xs md:text-sm text-slate-400 max-w-lg mx-auto font-medium leading-relaxed">
-                    Asisten AI profesional untuk pemrograman, analisis bug, penataan arsitektur, dan penciptaan website modern terstruktur.
+                  <p className="text-[11px] sm:text-xs text-slate-400 max-w-lg mx-auto font-medium leading-relaxed flex flex-wrap justify-center gap-x-[0.25em] gap-y-1">
+                    {"A smart AI assistant ready to help you design systems, write code, debug errors, and write scripts in any programming language instantly.".split(" ").map((word, wIdx) => (
+                      <motion.span
+                        key={wIdx}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: 0.25,
+                          delay: 0.4 + (wIdx * 0.025),
+                          ease: "easeOut"
+                        }}
+                        className="inline-block"
+                      >
+                        {word}
+                      </motion.span>
+                    ))}
                   </p>
                 </div>
+
+                {/* Modular Language Script Assistant Showcase Grid */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.15, duration: 0.4 }}
+                  className="space-y-4 max-w-xl mx-auto pt-6 border-t border-slate-900/60"
+                >
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">
+                    Select a programming language to start writing scripts:
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {[
+                      { name: 'PHP', tech: 'Laravel, Vanilla', prompt: 'I need a PHP script for ' },
+                      { name: 'JavaScript', tech: 'Node.js, React, ES6', prompt: 'Please write a JavaScript script for ' },
+                      { name: 'Python', tech: 'FastAPI, Django, Flask', prompt: 'I want a Python script for ' },
+                      { name: 'C++', tech: 'OOP, Algorithms', prompt: 'Please build a C++ script for ' },
+                      { name: 'HTML & CSS', tech: 'Responsive, Tailwind', prompt: 'Design and code an HTML & CSS layout for ' },
+                      { name: 'Java', tech: 'Spring, OOP, Dev', prompt: 'Please create a Java script for ' },
+                      { name: 'Others', tech: 'Go, SQL, Rust, C#', prompt: 'Help me write a script in ' },
+                    ].map((lang, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setInputText(lang.prompt)}
+                        className="group relative flex flex-col justify-between items-center rounded-xl border border-slate-900 bg-[#07090e]/80 p-3 text-center transition-all duration-200 hover:border-indigo-950/70 hover:bg-[#0c0e14] cursor-pointer select-none active:scale-97"
+                      >
+                        <span className="text-xs font-bold text-slate-200 group-hover:text-indigo-400 transition-colors duration-150">
+                          {lang.name}
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-mono mt-1 w-full truncate">
+                          {lang.tech}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
               </motion.div>
             ) : (
               // Chat conversation timeline
@@ -1014,7 +1180,7 @@ export default function App() {
                   // Skip displaying the default welcome greeting in the timeline to keep it very elegant
                   if (msg.id === 'welcome') return null;
  
-                  const isXenova = msg.sender === 'xenova' || msg.sender === 'xyron';
+                  const isVexon = msg.sender === 'xenova' || msg.sender === 'xyron' || msg.sender === 'vexon';
                   return (
                     <motion.div
                       key={msg.id}
@@ -1026,7 +1192,7 @@ export default function App() {
                       {/* Content Bubble container - Full Screen on mobile for AI, shrink-to-fit for user */}
                       <div 
                         className={`rounded-[18px] px-4 py-3 shadow-sm ${
-                          !isXenova 
+                          !isVexon 
                             ? 'w-auto max-w-[85%] sm:max-w-[70%] bg-indigo-600 text-white rounded-tr-xs selection:bg-slate-200 selection:text-indigo-900' 
                             : msg.isError 
                               ? 'w-full sm:max-w-[85%] bg-red-950/20 border border-red-900/30 rounded-tl-xs'
@@ -1034,7 +1200,7 @@ export default function App() {
                         }`}
                       >
                         {/* User Attachment Render */}
-                        {!isXenova && (msg.attachmentName || msg.attachmentUrl) && (
+                        {!isVexon && (msg.attachmentName || msg.attachmentUrl) && (
                           <div className="mb-3 rounded-xl bg-slate-950/40 p-2 border border-white/5 flex items-center gap-2.5 max-w-full select-none">
                             {msg.attachmentType?.startsWith('image/') && msg.attachmentUrl ? (
                               <div className="relative h-11 w-11 overflow-hidden rounded-lg bg-black/50 border border-white/10 shrink-0">
@@ -1062,7 +1228,7 @@ export default function App() {
                         {/* Core Response */}
                         <MessageBubbleContent
                           text={msg.text}
-                          isXenova={isXenova}
+                          isVexon={isVexon}
                           isStreaming={msg.isStreaming}
                           msgId={msg.id}
                           onTypewriterComplete={handleTypewriterComplete}
@@ -1071,7 +1237,7 @@ export default function App() {
                         {msg.isError && (
                           <div className="mt-4 pt-3.5 border-t border-red-950/40 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between select-none">
                             <span className="text-[11px] text-red-400 font-semibold leading-relaxed">
-                              {"Quota terlampaui? Anda bisa menunggu sesaat atau memasukkan API Key baru di Settings > Secrets."}
+                              {"Quota exceeded? Please wait a few moments or add your API Key in Settings > Secrets."}
                             </span>
                             <button
                               type="button"
@@ -1079,17 +1245,17 @@ export default function App() {
                               className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/35 px-4 py-2 text-xs font-bold text-red-300 hover:text-red-200 transition-all cursor-pointer active:scale-95 shadow-sm shadow-red-900/10 shrink-0"
                             >
                               <RefreshCw className="h-3.5 w-3.5" />
-                              <span>Coba Kirim Ulang</span>
+                              <span>Retry Send</span>
                             </button>
                           </div>
                         )}
  
                         {/* Grounding Sources / Citations */}
-                        {isXenova && msg.sources && msg.sources.length > 0 && (
+                        {isVexon && msg.sources && msg.sources.length > 0 && (
                           <div className="mt-4 pt-3.5 border-t border-slate-900/80 space-y-2 select-none">
                             <div className="flex items-center gap-1.5 text-slate-400 text-[10.5px] font-bold">
                               <Globe className="h-3 w-3 text-indigo-400" />
-                              <span>Sumber Referensi ({msg.sources.length})</span>
+                              <span>Reference Sources ({msg.sources.length})</span>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                               {msg.sources.map((src, srcIdx) => (
@@ -1111,7 +1277,7 @@ export default function App() {
                         {/* Timestamp Row */}
                         <div className="flex items-center justify-end gap-1.5 mt-2.5 opacity-40 select-none">
                           <span className="text-[9px] font-medium font-mono">
-                            {new Date(msg.timestamp).toLocaleTimeString('id-ID', { 
+                            {new Date(msg.timestamp).toLocaleTimeString('en-US', { 
                               hour: '2-digit', 
                               minute: '2-digit' 
                             })}
@@ -1127,12 +1293,12 @@ export default function App() {
                   <div className="flex items-start gap-2.5 rounded-xl border border-red-900/40 bg-red-950/15 p-4 text-red-400 text-xs leading-relaxed">
                     <AlertCircle className="h-4 w-4 shrink-0 text-red-400/90 mt-0.5" />
                     <div className="flex-1">
-                      <span className="font-semibold">Koneksi Gagal:</span> {errorMessage}
+                      <span className="font-semibold">Connection Failed:</span> {errorMessage}
                     </div>
                   </div>
                 )}
 
-                {/* Xenova Generation Loader indicator without avatar emblem */}
+                {/* Vexon Generation Loader indicator without avatar emblem */}
                 {isPending && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -1142,7 +1308,7 @@ export default function App() {
                     <div className="bg-[#0d1017] border border-slate-900 rounded-[18px] rounded-tl-xs px-4 py-3.5 space-y-2 w-full sm:max-w-[85%] select-none">
                       <div className="flex items-center gap-2">
                         <span className="inline-flex h-1.5 w-1.5 rounded-full bg-indigo-500 animate-ping"></span>
-                        <p className="text-[10px] font-semibold text-slate-450 tracking-wider uppercase font-display">Xenova sedang memproses...</p>
+                        <p className="text-[10px] font-semibold text-slate-450 tracking-wider uppercase font-display">Thinking...</p>
                       </div>
                       <div className="flex items-center gap-1.5 py-1">
                         <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.3s]"></div>
@@ -1205,7 +1371,7 @@ export default function App() {
                     className="flex items-center gap-2 rounded-full border border-indigo-950 bg-indigo-950/20 px-3 py-1 text-[11px] font-bold text-indigo-400 backdrop-blur-xs"
                   >
                     <Cpu className="h-3.5 w-3.5 animate-spin-slow" />
-                    <span>Mode Berpikir Aktif</span>
+                    <span>Thinking Mode Active</span>
                     <button 
                       type="button" 
                       onClick={() => setThinkingModel(false)} 
@@ -1228,7 +1394,7 @@ export default function App() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyPress}
                 onFocus={handleInputFocus}
-                placeholder="Tanya Xenova"
+                placeholder="Ask Vexon..."
                 rows={2}
                 disabled={isPending}
                 className="w-full bg-transparent border-0 px-2 pt-1 pb-2 text-sm md:text-base text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 resize-none min-h-[50px] max-h-[180px] leading-relaxed font-sans scrollbar-none"
@@ -1248,10 +1414,10 @@ export default function App() {
                         ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                         : 'text-slate-400 hover:text-slate-200 border border-transparent'
                     }`}
-                    title="Fast: Jawaban cepat & ringkas"
+                    title="Fast: Quick & concise responses"
                   >
                     <img 
-                      src="/fast.jpg" 
+                      src="/fast.png" 
                       alt="Lightning" 
                       className="h-3.5 w-3.5 rounded-sm object-cover"
                       referrerPolicy="no-referrer"
@@ -1268,7 +1434,7 @@ export default function App() {
                         ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
                         : 'text-slate-400 hover:text-slate-200 border border-transparent'
                     }`}
-                    title="Code: Analisis cerdas & penulisan kode pintar"
+                    title="Code: Smart analysis & script writing"
                   >
                     <img 
                       src="/code.jpg" 
@@ -1292,7 +1458,7 @@ export default function App() {
                         ? 'bg-rose-500 hover:bg-rose-600 text-white border-rose-500 shadow-md' 
                         : 'bg-[#0d1017] text-slate-300 border-slate-800/80 hover:bg-slate-900 shadow-sm'
                     }`}
-                    title={isListening ? "Sedang merekam, klik untuk selesai..." : "Voice to Text"}
+                    title={isListening ? "Recording... Click to stop" : "Voice to Text"}
                   >
                     <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse text-white' : ''}`} />
                   </button>
@@ -1302,12 +1468,12 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setShowPlusMenu(!showPlusMenu)}
-                      className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 ${
+                      className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200 cursor-pointer active:scale-95 ${
                         showPlusMenu || attachedFile || thinkingModel
-                          ? 'bg-indigo-650 text-white border-indigo-650' 
-                          : 'bg-[#0d1017] text-slate-300 border-slate-800/80 hover:bg-slate-900 shadow-sm'
+                          ? 'bg-indigo-650 text-white border border-transparent' 
+                          : 'bg-[#0d1017] text-slate-300 border border-transparent hover:bg-slate-900 shadow-sm'
                       }`}
-                      title="Opsi Tambahan"
+                      title="Additional Options"
                     >
                       <Plus className={`h-4 w-4 transition-transform duration-250 ${showPlusMenu ? 'rotate-45' : ''}`} />
                     </button>
@@ -1348,7 +1514,7 @@ export default function App() {
                               <div className={`flex h-6 w-6 items-center justify-center rounded-lg ${thinkingModel ? 'bg-indigo-505/20' : 'bg-slate-800/25'} text-indigo-400`}>
                                 <Cpu className="h-3.5 w-3.5 animate-pulse" />
                               </div>
-                              <span>Berpikir</span>
+                              <span>Thinking</span>
                             </div>
                             {thinkingModel && (
                               <span className="h-1.5 w-1.5 rounded-full bg-indigo-505 animate-pulse" />
