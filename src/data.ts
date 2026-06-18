@@ -38,5 +38,5 @@ export const CHIP_PRESETS: SuggestionChip[] = [
   }
 ];
 
-export const WELCOME_MESSAGE = "Hello! I am Vexon, your professional AI Assistant. I am ready to help you with programming, debugging, architecture, and script creation. What would you like us to build today?";
+export const WELCOME_MESSAGE = "Hello! I am Fluxell, your professional AI Assistant. I am ready to help you with programming, debugging, architecture, and script creation. What would you like us to build today?";
 

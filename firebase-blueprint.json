@@ -6,7 +6,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "sender": { "type": "string", "enum": ["user", "xenova", "xyron", "vexon"] },
+        "sender": { "type": "string", "enum": ["user", "xenova", "xyron", "fluxell"] },
         "text": { "type": "string" },
         "timestamp": { "type": "number" },
         "isError": { "type": "boolean" },

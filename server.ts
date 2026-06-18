@@ -36,37 +36,32 @@ try {
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Initialize Gemini SDK with telemetry User-Agent
-const apiKey = process.env.GEMINI_API_KEY;
-
-if (!apiKey) {
-  console.warn("Peringatan: GEMINI_API_KEY tidak terdefinisi di environment variables!");
+// Helper to get lazy-initialized or dynamically updated Gemini client
+function getGoogleGenAI(customKey?: string): GoogleGenAI {
+  const currentKey = customKey || process.env.GEMINI_API_KEY;
+  if (!currentKey) {
+    throw new Error("GEMINI_API_KEY belum dikonfigurasi. Silakan tambahkan API Key Anda di menu Settings > Secrets pada AI Studio, atau gunakan custom API key di menu Pengaturan aplikasi ini.");
+  }
+  return new GoogleGenAI({
+    apiKey: currentKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 }
 
-const ai = new GoogleGenAI({
-  apiKey: apiKey || "",
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
-const VEXON_SYSTEM_INSTRUCTION = `
+const FLUXELL_SYSTEM_INSTRUCTION = `
 Identity & Personality:
-- Name: Vexon
+- Name: Fluxell
 - Type: Conversational AI Assistant
 - Personality: Warm, natural, extremely human-like, helpful, empathetic, and professional. Speak in an authentic, flowing, conversational, and non-robotic tone. Avoid overly structured or dry formulas where possible.
-- Default Language: English. Always converse in English unless the user writes/starts the conversation in another language.
-- Dynamic Language Adaptation (CRITICAL): Always matching the language of the user. Automatically detect and mirror the EXACT language used by the user in their active message. For example:
-  * If the user writes in Indonesian (e.g., "haloo"), respond naturally and completely in friendly, fluent, warm Indonesian (e.g., "iya, halo! Ada yang bisa aku bantu?").
-  * If the user writes in Javanese / Boso Jowo (e.g., "piye kabare", "tulung gawekno..."), respond in fluent, native, natural Javanese (Boso Jowo Ngoko or Jowo Kromo, e.g., "halo cak/mbak! piye, opo sing iso tak bantu?").
-  * If the user writes in Spanish, respond in fluent, warm Spanish.
-  * If the user writes in English, respond in natural English.
+- Language Rules: Maintain natural multilinguality. Always automatically detect and reply in the EXACT language used by the user (Indonesian, Javanese, English, Spanish, etc.). Match the user's vocabulary and dialect seamlessly to be as helpful and relatable as possible.
 
 Behavioral Guidelines:
-1. Singkat, Padat & To-The-Point (CRITICAL / UTAMA): Selalu berikan jawaban yang singkat, langsung pada intinya, dan minim penjelasan yang panjang lebar atau bertele-tele. Jawab secara minimalis tapi berbobot tinggi.
-2. Natural & Fluent (No Robot Talk): Maintain a natural human pacing and tone without robotic transitions, formulaic greeting clichés, or redundant automated.
+1. Concise, Crisp & To-The-Point (CRITICAL): Always provide short, highly focused answers directly addressing the user's needs with minimal fluff or meta-explanations.
+2. Natural & Fluent (No Robot Talk): Maintain a natural human pacing and tone without robotic transitions, formulaic greeting clichés, or redundant automated talk.
 3. Direct, Swift & Crisp (Speed Optimized): Respond extremely fast by cutting down on warmups, excessive explanations, or repetitive descriptions before and after the code. Deliver the code directly.
 4. Bug-free & Accurate Code (No Errors): Ensure code is fully functional, complete, and syntactically correct. Do not use placeholders (e.g. '// write your logic here').
 5. Format code using appropriate markdown backticks with precise, helpful comments.
@@ -80,7 +75,7 @@ app.get("/api/sessions", async (req, res) => {
       return res.json({ 
         sessions: [], 
         firebaseConnected: false, 
-        message: "Firebase tidak terhubung. Menggunakan penyimpanan lokal browser." 
+        message: "Firebase is not connected. Using local browser storage." 
       });
     }
 
@@ -96,8 +91,8 @@ app.get("/api/sessions", async (req, res) => {
 
     res.json({ sessions: dbSessions, firebaseConnected: true });
   } catch (error: any) {
-    console.error("Gagal mengambil session dari Firebase:", error);
-    res.status(500).json({ error: "Gagal memproses riwayat dari database Firebase." });
+    console.error("Failed to fetch sessions from Firebase:", error);
+    res.status(500).json({ error: "Failed to process chat history from Firebase database." });
   }
 });
 
@@ -108,13 +103,13 @@ app.post("/api/sessions/sync", async (req, res) => {
       return res.json({ 
         success: false, 
         firebaseConnected: false, 
-        message: "Firebase tidak terhubung. Sinkronisasi dilewati." 
+        message: "Firebase is not connected. Sync bypassed." 
       });
     }
 
     const { sessions } = req.body;
     if (!sessions || !Array.isArray(sessions)) {
-      return res.status(400).json({ error: "Data sessions tidak valid." });
+      return res.status(400).json({ error: "Invalid sessions data format." });
     }
 
     // Save each active session to Firebase
@@ -142,8 +137,8 @@ app.post("/api/sessions/sync", async (req, res) => {
 
     res.json({ success: true, firebaseConnected: true });
   } catch (error: any) {
-    console.error("Gagal menyinkronkan chat session ke Firebase:", error);
-    res.status(500).json({ error: "Gagal menyimpan riwayat ke database Firebase." });
+    console.error("Failed to sync chat sessions to Firebase:", error);
+    res.status(500).json({ error: "Failed to save chat history to Firebase database." });
   }
 });
 
@@ -156,17 +151,19 @@ app.get("/api/sessions/status", (req, res) => {
 });
 
 // Chat API Endpoint
-app.post("/api/vexon/chat", async (req, res) => {
+app.post("/api/fluxell/chat", async (req, res) => {
   try {
-    const { message, history, thinking, aiMode, fileData } = req.body;
+    const { message, history, thinking, aiMode, fileData, customApiKey } = req.body;
 
     if (!message && !fileData) {
-      return res.status(400).json({ error: "Pesan (message) atau file wajib diisi." });
+      return res.status(400).json({ error: "Message or file is required." });
     }
 
-    if (!apiKey) {
+    const currentApiKey = customApiKey || process.env.GEMINI_API_KEY;
+
+    if (!currentApiKey) {
       return res.status(500).json({
-        error: "GEMINI_API_KEY belum dikonfigurasi di server. Silakan tambahkan API Key Anda di menu Settings > Secrets pada AI Studio."
+        error: "GEMINI_API_KEY is not configured. Please add your API Key in Settings > Secrets in AI Studio, or use a custom API key in the application settings."
       });
     }
 
@@ -220,7 +217,7 @@ app.post("/api/vexon/chat", async (req, res) => {
         try {
           const textContent = Buffer.from(fileData.data, "base64").toString("utf-8");
           currentParts.push({
-            text: `[Isi dari file terlampir "${fileData.name || 'document'}"]:\n\`\`\`\n${textContent}\n\`\`\``
+            text: `[Contents of attached file "${fileData.name || 'document'}"]:\n\`\`\`\n${textContent}\n\`\`\``
           });
         } catch (e) {
           currentParts.push({
@@ -264,33 +261,33 @@ app.post("/api/vexon/chat", async (req, res) => {
     });
 
     // Dynamically update system instruction based on selected feature modes
-    let systemInstruction = VEXON_SYSTEM_INSTRUCTION;
+    let systemInstruction = FLUXELL_SYSTEM_INSTRUCTION;
 
     if (aiMode === 'code') {
       systemInstruction += `
-Aturan Tambahan - MODE CODE & ANALISIS PINTAR AKTIF (PENTING):
-- Berikan solusi kode yang bersih, modular, tangguh, dan terdokumentasi dengan baik.
-- Selesaikan tugas coding secara akurat namun efisien. JANGAN berpikir/reasoning terlalu bertele-tele atau membuat durasi menjadi lambat.
-- Langsung berikan porsi kode yang fungsional dan penjelasan yang ringkas-padat.
+Additional Guidelines - ACTIVE INTELLIGENT CODE & ANALYSIS MODE (PENTING):
+- Provide clean, modular, robust, and well-documented code solutions.
+- Solve coding tasks accurately and efficiently. Avoid overly verbose explanations.
+- Deliver functional code directly with concise, punchy explanations.
 `;
     } else if (aiMode === 'fast') {
       systemInstruction += `
-Aturan Tambahan - MODE FAST & TEPAT AKTIF (PENTING):
-- Jawablah pertanyaan pengguna sesingkat, sepadat, dan secepat mungkin!
-- Hilangkan basa-basi pembuka/penutup sepenuhnya. Berikan respon to-the-point agar throughput render sangat cepat dan responsif.
+Additional Guidelines - ACTIVE FAST & PRECISE MODE (PENTING):
+- Answer user queries as succinctly, concisely, and rapidly as possible!
+- Completely eliminate pleasantries or boilerplate lead-ins/lead-outs. Deliver responses instantly to optimize throughput.
 `;
     }
 
     if (thinking) {
       systemInstruction += `
-Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
-- Pengguna telah mengaktifkan mode berpikir mendalam secara kritis dan bertahap.
-- Anda WAJIB menganalisis dan menelaah pertanyaan ini secara mendalam, kritis, terperinci, dan bertahap seolah Anda adalah reasoning model paling andal di dunia.
-- Tulis semua proses analisis teoritis, dugaan alternatif, pertimbangan bug, dan perencanaan solusi di awal tanggapan Anda, dibungkus secara eksklusif dengan tag:
+Additional Guidelines - ACTIVE DEEP THINKING MODE (PENTING):
+- The user has enabled critical, step-by-step deep reasoning mode.
+- You MUST analyze the request critically, deeply, and step-by-step, explaining your core logic and potential edge cases.
+- Write your logical and planning thoughts FIRST at the beginning of your response, wrapped exclusively inside thinking tags:
 <think>
-[Proses analisis berstruktur dan penalaran detail di sini]
+[Detailed critical reasoning and step-by-step planning thoughts]
 </think>
-- Setelah tag penutup </think>, berikan penjelasan atau tanggapan final Anda secara rapi, jelas, dan profesional.
+- Provide your final response clean and beautifully formatted after the </think> tag.
 `;
     }
 
@@ -317,17 +314,44 @@ Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
       }
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: contents,
-      config: config
-    });
+    let response;
+    let attempts = 0;
+    const maxAttempts = 3;
+    let currentModel = "gemini-3.5-flash";
 
-    const text = response.text || "Maaf, daya analisis saya sedang terdistorsi. Bisa Anda ulangi kembali?";
+    while (attempts < maxAttempts) {
+      try {
+        const aiInstance = getGoogleGenAI(currentApiKey);
+        response = await aiInstance.models.generateContent({
+          model: currentModel,
+          contents: contents,
+          config: config
+        });
+        break; // Success
+      } catch (e: any) {
+        attempts++;
+        const errString = String(e.message || "") + String(e.status || "") + JSON.stringify(e);
+        const isHighDemand = errString.includes("503") || errString.includes("UNAVAILABLE") || errString.includes("high demand") || (e.status === 503);
+        
+        if (isHighDemand && attempts < maxAttempts) {
+          if (currentModel === "gemini-3.5-flash") {
+            currentModel = "gemini-3.1-flash-lite";
+            console.warn(`Fluxell: Gemini API 503 High Demand, switching to fallback model ${currentModel}...`);
+          } else {
+            console.warn(`Fluxell: Gemini API 503 High Demand... Retrying attempt ${attempts}/${maxAttempts} in 2 seconds...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } else {
+          throw e; // Throw if not a 503 or max attempts reached
+        }
+      }
+    }
+
+    const text = response?.text || "I apologize, but my core analysis systems are experiencing technical difficulties. Could you please try again?";
 
     // Extract grounding URLs/citations if search grounding was activated
     let sources: any[] = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const chunks = response?.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks && Array.isArray(chunks)) {
       chunks.forEach((chunk: any) => {
         if (chunk.web && chunk.web.uri && chunk.web.title) {
@@ -342,7 +366,7 @@ Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
     res.json({ text, sources });
 
   } catch (error: any) {
-    console.error("Vexon Backend API Error:", error);
+    console.error("Fluxell Backend API Error:", error);
     
     const errString = String(error.message || "") + String(error.status || "") + JSON.stringify(error);
     const isQuotaExceeded = errString.includes("429") || 
@@ -350,16 +374,28 @@ Aturan Tambahan - MODE BERPIKIR MENDALAM AKTIF (PENTING):
                             errString.includes("RESOURCE_EXHAUSTED") || 
                             (error.status === 429);
 
+    const isHighDemand = errString.includes("503") || 
+                         errString.includes("UNAVAILABLE") || 
+                         errString.includes("high demand") || 
+                         (error.status === 503);
+
     if (isQuotaExceeded) {
       return res.status(429).json({
-        error: "Kuota API Terlampaui (RESOURCE_EXHAUSTED). Anda telah melampaui batas kuota permintaan gratis menit ini untuk Gemini API.\n\n👉 *Silakan tunggu 1-2 menit hingga kuota di-reset otomatis*, atau tambahkan API Key Anda sendiri melalui menu **Settings > Secrets** di AI Studio untuk batasan kuota yang jauh lebih besar.",
+        error: "API Quota Exceeded (RESOURCE_EXHAUSTED). You have exceeded the free rate limits per minute for the Gemini API.\n\n👉 *Please wait 1-2 minutes for the quota to reset automatically*, or add your own API Key via the **Settings** menu inside this application or under **Settings > Secrets** in AI Studio.",
         details: "API rate limit / quota exceeded"
       });
     }
 
+    if (isHighDemand) {
+      return res.status(500).json({
+        error: "Gemini server is experiencing a high volume of requests (High Demand - 503 UNAVAILABLE).\n\n👉 *Please try again in a few moments.*",
+        details: "API Service Unavailable / High Demand"
+      });
+    }
+
     res.status(500).json({
-      error: error.message || "Terdapat gangguan internal saat menghubungi pusat kalkulasi Vexon.",
-      details: error.status ? `Status API: ${error.status}` : undefined
+      error: error.message || "An internal error occurred while communicating with the Fluxell calculations core.",
+      details: error.status ? `API Status: ${error.status}` : undefined
     });
   }
 });
@@ -382,10 +418,10 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Vexon server is active on http://0.0.0.0:${PORT}`);
+    console.log(`Fluxell server is active on http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer().catch((err) => {
-  console.error("Failed to start Vexon server:", err);
+  console.error("Failed to start Fluxell server:", err);
 });

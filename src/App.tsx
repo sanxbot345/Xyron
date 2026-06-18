@@ -22,7 +22,15 @@ import {
   Film,
   Mic,
   MicOff,
-  ArrowUp
+  ArrowUp,
+  Settings,
+  Server,
+  Coffee,
+  Layers,
+  Boxes,
+  Eye,
+  EyeOff,
+  Brain
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message, SuggestionChip, ChatSession } from './types';
@@ -107,13 +115,14 @@ function StreamingThinkingText({ text, onComplete }: StreamingThinkingTextProps)
 
 interface MessageBubbleContentProps {
   text: string;
-  isVexon: boolean;
+  isFluxell: boolean;
   isStreaming?: boolean;
   msgId: string;
   onTypewriterComplete: (id: string) => void;
+  isDark: boolean;
 }
 
-function MessageBubbleContent({ text, isVexon, isStreaming, msgId, onTypewriterComplete }: MessageBubbleContentProps) {
+function MessageBubbleContent({ text, isFluxell, isStreaming, msgId, onTypewriterComplete, isDark }: MessageBubbleContentProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const { thought, content } = parseThoughtAndContent(text ?? "");
   const [thoughtFinished, setThoughtFinished] = useState(false);
@@ -133,19 +142,38 @@ function MessageBubbleContent({ text, isVexon, isStreaming, msgId, onTypewriterC
     return (
       <div className="space-y-3">
         {/* Thought Process Box */}
-        <div className="rounded-xl border border-indigo-950 bg-indigo-950/10 overflow-hidden">
+        <div className={`rounded-xl border transition-all duration-300 overflow-hidden ${
+          isDark 
+            ? 'border-indigo-500/15 bg-indigo-950/20 shadow-[0_4px_20px_rgba(99,102,241,0.03)]' 
+            : 'border-indigo-100/80 bg-indigo-50/15 shadow-[0_4px_16px_rgba(99,102,241,0.02)] border-dashed'
+        }`}>
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="w-full flex items-center justify-between px-3.5 py-2.5 text-[11.5px] font-bold text-indigo-400 hover:bg-indigo-950/20 transition-all select-none cursor-pointer"
+            className={`w-full flex items-center justify-between px-4 py-3 text-xs font-bold transition-all duration-150 select-none cursor-pointer ${
+              isDark 
+                ? 'text-indigo-300 hover:bg-indigo-950/40' 
+                : 'text-indigo-600 hover:bg-indigo-100/40'
+            }`}
           >
-            <div className="flex items-center gap-2">
-              <Cpu className="h-3.5 w-3.5 animate-spin-slow text-indigo-400" />
-              <span>{isStreaming && !thoughtFinished ? "Thinking..." : "Thought Process"}</span>
+            <div className="flex items-center gap-2.5">
+              <Brain className={`h-4 w-4 shrink-0 ${isStreaming && !thoughtFinished ? 'animate-pulse text-indigo-400' : 'text-indigo-500'}`} />
+              <span className="tracking-wide">
+                {isStreaming && !thoughtFinished ? "Sedang Berpikir..." : "Proses Berpikir"}
+              </span>
             </div>
-            <span className="text-[10px] text-indigo-500 font-medium font-sans">
-              {isExpanded ? "Hide" : "Show"}
-            </span>
+            <div className="flex items-center gap-1.5 opacity-80">
+              <span className="text-[10px] font-semibold font-sans">
+                {isExpanded ? "Sembunyikan" : "Tampilkan"}
+              </span>
+              <motion.span
+                animate={{ rotate: isExpanded ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+                className="text-[9px]"
+              >
+                ▼
+              </motion.span>
+            </div>
           </button>
           
           <AnimatePresence initial={true}>
@@ -155,9 +183,18 @@ function MessageBubbleContent({ text, isVexon, isStreaming, msgId, onTypewriterC
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="px-3.5 pb-3 border-t border-slate-950"
+                className={`px-4 pb-3.5 border-t ${
+                  isDark ? 'border-indigo-950/60' : 'border-indigo-100/50'
+                }`}
               >
-                <div id={`thought-${msgId}`} className="text-xs text-indigo-300/80 leading-relaxed font-mono whitespace-pre-wrap select-text pt-2.5 max-h-48 overflow-y-auto scrollbar-thin">
+                <div 
+                  id={`thought-${msgId}`} 
+                  className={`text-xs leading-relaxed font-mono whitespace-pre-wrap select-text pt-3 max-h-60 overflow-y-auto scrollbar-thin border-l-2 pl-3 ${
+                    isDark 
+                      ? 'text-indigo-200/60 border-indigo-500/15' 
+                      : 'text-indigo-805/65 border-indigo-400/20'
+                  }`}
+                >
                   {showThoughtStreaming ? (
                     <StreamingThinkingText 
                       text={thought} 
@@ -193,7 +230,7 @@ function MessageBubbleContent({ text, isVexon, isStreaming, msgId, onTypewriterC
   }
 
   // Fallback if no thought block is present
-  return isVexon ? (
+  return isFluxell ? (
     isStreaming ? (
       <StreamingText 
         text={text} 
@@ -245,7 +282,7 @@ export default function App() {
     let initialMessages: Message[] = [
       {
         id: 'welcome',
-        sender: 'vexon',
+        sender: 'fluxell',
         text: WELCOME_MESSAGE,
         timestamp: Date.now()
       }
@@ -377,69 +414,15 @@ export default function App() {
     }
   };
 
-  const [firebaseStatus, setFirebaseStatus] = useState<{ firebaseConnected: boolean; hasConfig: boolean }>({
+  const [firebaseStatus] = useState<{ firebaseConnected: boolean; hasConfig: boolean }>({
     firebaseConnected: false,
     hasConfig: false
   });
 
-  // Sync sessions to localStorage and Firebase Firestore via server
+  // Sync sessions to localStorage (fully local and isolated per device)
   useEffect(() => {
     localStorage.setItem('xyron_sessions_v9', JSON.stringify(sessions));
-
-    const syncToFirebase = async () => {
-      try {
-        const res = await fetch('/api/sessions/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessions })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setFirebaseStatus({
-            firebaseConnected: !!data.firebaseConnected,
-            hasConfig: data.firebaseConnected !== undefined
-          });
-        }
-      } catch (err) {
-        console.warn("Failed to sync history with Firebase Firestore:", err);
-      }
-    };
-
-    const timer = setTimeout(syncToFirebase, 800);
-    return () => clearTimeout(timer);
   }, [sessions]);
-
-  // Load sessions and connection status from Firebase Firestore on mount
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const res = await fetch('/api/sessions');
-        if (res.ok) {
-          const data = await res.json();
-          setFirebaseStatus({
-            firebaseConnected: !!data.firebaseConnected,
-            hasConfig: data.firebaseConnected !== undefined
-          });
-
-          if (data && data.firebaseConnected && data.sessions && data.sessions.length > 0) {
-            const sanitized = data.sessions.map((s: ChatSession) => ({
-              ...s,
-              messages: s.messages.map(m => m.isStreaming ? { ...m, isStreaming: false } : m)
-            }));
-            setSessions(sanitized);
-
-            const hasActive = sanitized.some((s: ChatSession) => s.id === activeSessionId);
-            if (!hasActive && sanitized.length > 0) {
-              setActiveSessionId(sanitized[0].id);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Gagal mengambil history dari Firebase:', err);
-      }
-    };
-    fetchInitialData();
-  }, []);
 
   // Sync activeSessionId to localStorage
   useEffect(() => {
@@ -475,6 +458,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showSidebar, setShowSidebar] = useState(false);
+  const [deleteOverlaySessionId, setDeleteOverlaySessionId] = useState<string | null>(null);
 
   // Plus menu overlay, attachments, and thinking states
   const [showPlusMenu, setShowPlusMenu] = useState(false);
@@ -484,6 +468,41 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [aiMode, setAiMode] = useState<'fast' | 'code'>('fast');
+  
+  // Theme and Settings State
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [customApiKey, setCustomApiKey] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('fluxell_custom_api_key') || '';
+    }
+    return '';
+  });
+  const [showApiKeyPlain, setShowApiKeyPlain] = useState(false);
+  const [theme, setTheme] = useState<'default' | 'light' | 'dark'>(() => {
+    // Force set 'dark' in localStorage to migrate any existing light-mode settings
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('fluxell_theme', 'dark');
+    }
+    return 'dark';
+  });
+  
+  const [systemIsDark, setSystemIsDark] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const listener = (e: MediaQueryListEvent) => {
+      setSystemIsDark(e.matches);
+    };
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, []);
+
+  const isDark = true; // Always absolute black/dark AI theme as requested
+
+  useEffect(() => {
+    localStorage.setItem('fluxell_theme', 'dark');
+  }, [theme]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -513,10 +532,14 @@ export default function App() {
       rec.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error);
         setIsListening(false);
+        if (event.error === 'aborted') {
+          // Silent cancel/aborted state, do not display error message
+          return;
+        }
         if (event.error === 'not-allowed') {
-          setErrorMessage('Akses mikrofon diblokir. Harap berikan izin akses mikrofon untuk aplikasi ini di peramban Anda, atau jalankan aplikasi ini di tab baru.');
+          setErrorMessage('Microphone access blocked. Please grant microphone permissions to this application/tab in your browser, or open in a new tab.');
         } else {
-          setErrorMessage(`Gagal memproses suara: ${event.error || 'Terjadi kesalahan sistem'}`);
+          setErrorMessage(`Failed to process voice: ${event.error || 'System error occurred'}`);
         }
       };
 
@@ -539,7 +562,7 @@ export default function App() {
         rec.start();
       } catch (err) {
         console.error('Error starting recognition:', err);
-        setErrorMessage('Gagal memulai perekam suara. Silakan coba lagi.');
+        setErrorMessage('Failed to start speech recorder. Please try again.');
       }
     }
   };
@@ -714,19 +737,19 @@ export default function App() {
     setIsPending(true);
 
     // Decorate prompt with system directives depending on active modes
-    let modifiedPrompt = textToSend || (fileForPrompt ? `Kaji dan analisis file terlampir: ${fileForPrompt.name}` : '');
+    let modifiedPrompt = textToSend || (fileForPrompt ? `Review and analyze the attached file: ${fileForPrompt.name}` : '');
     
     if (aiMode === 'code') {
-      modifiedPrompt += "\n\n[SISTEM MODE CODE: Pengguna mengaktifkan Mode Code & Analisis Pintar. Berikan solusi kode super bersih, berikan ulasan arsitektur mendalam, lakukan analisis komprehensif, pastikan logic bebas bug, serta jelaskan sintaks secara mendetail, terstruktur, dan profesional.]";
+      modifiedPrompt += "\n\n[SYSTEM CODE MODE: User has enabled Code & Smart Analysis Mode. Provide ultra-clean code solutions, write deep architectural reviews, perform a comprehensive analysis, ensure the logic is bug-free, and explain the syntax in a detailed, structured, and professional manner.]";
     } else if (aiMode === 'fast') {
-      modifiedPrompt += "\n\n[SISTEM MODE FAST: Pengguna mengaktifkan Mode Fast. Berikan jawaban yang super ringkas, cepat, to-the-point, hilangkan penjelasan yang terlalu bertele-tele agar respon dapat dirender secepat kilat.]";
+      modifiedPrompt += "\n\n[SYSTEM FAST MODE: User has enabled Fast Mode. Provide a super concise, rapid, and to-the-point answer. Eliminate any verbose explanations so the response renders instantly.]";
     }
 
     if (thinkingModel) {
-      modifiedPrompt += "\n\n[SISTEM: Aktifkan mode berpikir mendalam. Sebelum Anda memberikan jawaban final, Anda WAJIB menjabarkan analisis logis, pertimbangan arsitektur, dan rincian penalaran Anda di dalam blok `<think>...</think>` pada bagian awal respon Anda. Lakukan secara detail layaknya reasoning model.]";
+      modifiedPrompt += "\n\n[SYSTEM: Enable deep thinking mode. Before giving your final answer, you MUST detail your logical analysis, structural considerations, and step-by-step reasoning inside a `<think>...</think>` block at the beginning of your response. Keep it structured and comprehensive like a true reasoning model.]";
     }
     if (fileForPrompt) {
-      modifiedPrompt += `\n\n[SISTEM: Dokumen/file terlampir oleh pengguna bernama "${fileForPrompt.name}" (${(fileForPrompt.size / 1024).toFixed(1)} KB) bertipe "${fileForPrompt.type || 'unknown'}". Integrasikan konteks lampiran file ini ke dalam penjelasan arsitektur Anda secara relevan.]`;
+      modifiedPrompt += `\n\n[SYSTEM: Attached user document/file is named "${fileForPrompt.name}" (${(fileForPrompt.size / 1024).toFixed(1)} KB) of type "${fileForPrompt.type || 'unknown'}". Seamlessly integrate the relevant context of this file/document into your architectural explanation.]`;
     }
 
     try {
@@ -741,11 +764,11 @@ export default function App() {
             data: base64Data
           };
         } catch (fileErr) {
-          console.error("Gagal mengonversi file ke Base64:", fileErr);
+          console.error("Failed to convert file to Base64:", fileErr);
         }
       }
 
-      const response = await fetch('/api/vexon/chat', {
+      const response = await fetch('/api/fluxell/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -756,35 +779,44 @@ export default function App() {
           history: messages.slice(1), // skip the welcome greeting to keep context clean
           thinking: thinkingModel,
           aiMode: aiMode,
-          fileData: fileDataPayload
+          fileData: fileDataPayload,
+          customApiKey: customApiKey || undefined
         })
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Terjadi kesalahan sistem saat menghubungi Vexon.');
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        data = await response.json();
+      } else {
+        const textResponse = await response.text();
+        console.error("Non-JSON Response:", textResponse);
+        throw new Error("Server returned an invalid format. High demand or traffic congestion is active (503).");
       }
 
-      const vexonMsg: Message = {
-        id: `vexon-${Date.now()}`,
-        sender: 'vexon',
+      if (!response.ok) {
+        throw new Error(data?.error || 'A system error occurred while contacting Fluxell.');
+      }
+
+      const fluxellMsg: Message = {
+        id: `fluxell-${Date.now()}`,
+        sender: 'fluxell',
         text: data.text,
         timestamp: Date.now(),
         isStreaming: true,
         sources: data.sources
       };
 
-      setMessages(prev => [...prev, vexonMsg]);
+      setMessages(prev => [...prev, fluxellMsg]);
 
     } catch (error: any) {
       console.error('Chat error:', error);
-      setErrorMessage(error.message || 'Koneksi terputus. Silakan periksa koneksi internet atau coba beberapa saat lagi.');
+      setErrorMessage(error.message || 'Connection lost. Please check your internet connection or try again in a few moments.');
       
       const errorMsg: Message = {
         id: `error-${Date.now()}`,
-        sender: 'vexon',
-        text: `⚠️ **Gagal memuat respons**\n\n${error.message || 'Gagal tersambung dengan server otak Vexon.'}\n\n*Silakan coba kirim ulang masukan Anda.*`,
+        sender: 'fluxell',
+        text: `⚠️ **Failed to load response**\n\n${error.message || 'Failed to connect to the Fluxell core server.'}\n\n*Please try sending your message again.*`,
         timestamp: Date.now(),
         isError: true
       };
@@ -801,11 +833,11 @@ export default function App() {
   };
 
   const clearChatHistory = () => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus seluruh riwayat percakapan dengan Vexon?')) {
+    if (window.confirm('Are you sure you want to clear your entire chat history with Fluxell?')) {
       const initialChat: Message[] = [
         {
           id: 'welcome',
-          sender: 'vexon',
+          sender: 'fluxell',
           text: WELCOME_MESSAGE,
           timestamp: Date.now()
         }
@@ -847,49 +879,63 @@ export default function App() {
     : CHIP_PRESETS.filter(chip => chip.category === selectedCategory);
 
   return (
-    <div className="flex fixed inset-0 w-full bg-[#090b10] text-slate-100 font-sans overflow-hidden" id="app_root">
+    <div className={`flex fixed inset-0 w-full transition-colors duration-300 font-sans overflow-hidden ${
+      isDark ? 'bg-black text-[#f1f5f9]' : 'bg-[#f8fafc] text-slate-800'
+    }`} id="app_root">
       
       {/* 1. SIDEBAR PANEL (Desktop & Collapsible Mobile Grid) */}
       <aside 
         id="side_panel"
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-900 bg-[#0d1017] transition-transform duration-300 xl:translate-x-0 xl:static xl:flex ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col transition-all duration-300 xl:translate-x-0 xl:static xl:flex ${
           showSidebar ? 'translate-x-0' : '-translate-x-full'
+        } ${
+          isDark ? 'border-r border-neutral-900 bg-black' : 'border-r border-slate-200 bg-slate-100 text-slate-900'
         }`}
       >
         {/* Sidebar Header */}
-        <div className="flex h-16 items-center justify-between px-6 border-b border-slate-950">
+        <div className={`flex h-20 xl:h-16 items-center justify-between px-6 pt-5 xl:pt-0 transition-colors duration-300 ${
+          isDark ? 'bg-black' : 'bg-slate-100'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 overflow-hidden items-center justify-center rounded-xl border border-slate-800 bg-[#0d1017]/80 shadow-md">
+            <div className={`flex h-10 w-10 overflow-hidden items-center justify-center rounded-xl border shadow-sm transition-colors ${
+              isDark ? 'border-neutral-900 bg-zinc-950' : 'border-slate-200 bg-white shadow-xs'
+            }`}>
               <img 
-                src="https://i.imgur.com/eUfx6Xy.png" 
-                alt="Vexon Logo" 
+                src="/favicon.jpg" 
+                alt="Fluxell Logo" 
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
               />
             </div>
             <div>
-              <h1 className="font-display text-lg font-bold tracking-tight text-white flex items-center gap-1.5 font-sans">
-                VEXON
+              <h1 className={`font-display text-lg font-bold tracking-tight flex items-center gap-1.5 font-sans transition-colors ${
+                isDark ? 'text-white' : 'text-slate-900'
+              }`}>
+                Fluxell
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
               </h1>
-              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Professional AI</p>
+              <p className={`text-[10px] uppercase tracking-wider font-semibold ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Professional AI</p>
             </div>
           </div>
           <button 
             onClick={() => setShowSidebar(false)} 
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-900 hover:text-white xl:hidden cursor-pointer"
+            className={`rounded-lg p-1.5 transition-colors xl:hidden cursor-pointer ${
+              isDark ? 'text-slate-400 hover:bg-slate-900 hover:text-white' : 'text-slate-500 hover:bg-slate-200 hover:text-slate-900'
+            }`}
           >
-            <X className="h-5 w-5" />
+            <X className="h-4.5 w-4.5" />
           </button>
         </div>
 
         {/* Sidebar Body */}
         <div className="flex-grow flex flex-col min-h-0">
           {/* Obrolan Baru (New Chat Button) */}
-          <div className="p-4 border-b border-slate-950 shrink-0">
+          <div className={`p-4 border-b shrink-0 transition-colors ${
+            isDark ? 'border-slate-950' : 'border-slate-200 bg-slate-100/10'
+          }`}>
             <button
               onClick={createNewSession}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-550 text-white shadow-md shadow-indigo-600/10 px-4 py-2.5 text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer active:scale-98 select-none"
@@ -902,7 +948,7 @@ export default function App() {
           {/* Session List */}
           <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1.5 scrollbar-thin scrollbar-transparent">
             <div className="px-3 mb-2 shrink-0">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Chat History</span>
+              <span className={`text-[10px] font-extrabold uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Chat History</span>
             </div>
 
             {sessions.filter(s => s.messages.some(m => m.sender === 'user')).map(s => {
@@ -914,49 +960,78 @@ export default function App() {
                     setActiveSessionId(s.id);
                     setShowSidebar(false); // Close sidebar on mobile select
                   }}
-                  className={`group relative flex items-center justify-between gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium transition-all duration-200 cursor-pointer border select-none ${
+                  className={`group relative flex items-center justify-between gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-all duration-200 cursor-pointer border select-none overflow-hidden ${
                     isActive
-                      ? 'bg-slate-900/80 text-white border-slate-800'
-                      : 'bg-transparent text-slate-450 hover:bg-slate-900/30 hover:text-slate-200 border-transparent'
+                      ? isDark 
+                        ? 'bg-slate-900/80 text-white border-slate-800 shadow-sm shadow-slate-950/40'
+                        : 'bg-white text-indigo-950 border-slate-200 shadow-[0_1px_3px_rgba(15,23,42,0.04)] font-bold'
+                      : isDark
+                        ? 'bg-transparent text-slate-400 hover:bg-slate-900/30 hover:text-slate-200 border-transparent'
+                        : 'bg-transparent text-slate-600 hover:bg-slate-200 hover:text-slate-950 border-transparent'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <MessageSquare className={`h-4 w-4 shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-500'}`} />
+                  <div className="flex items-center gap-2 min-w-0 flex-1 py-1">
+                    <MessageSquare className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
                     <span className="truncate leading-none font-sans font-medium">{s.title}</span>
                   </div>
-
+                  {/* Redundant trash bin element always visible for mobile / desktop hover */}
                   <button
-                    onClick={(e) => deleteSession(s.id, e)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-red-950/30 hover:text-red-400 text-slate-500 transition-all cursor-pointer duration-150 relative z-10 shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteOverlaySessionId(s.id);
+                    }}
+                    className={`p-1.5 rounded-lg transition-all cursor-pointer relative z-10 shrink-0 ${
+                      isDark 
+                        ? 'hover:bg-red-950/30 hover:text-red-400 text-slate-500' 
+                        : 'hover:bg-red-50 hover:text-red-600 text-slate-400 hover:text-red-600 font-bold'
+                    }`}
                     title="Delete Chat"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
+
+                  {deleteOverlaySessionId === s.id && (
+                    <div 
+                      className={`absolute inset-0 z-25 flex items-center justify-between px-3 rounded-xl transition-all duration-200 border ${
+                        isDark 
+                          ? 'bg-red-950 border-red-800 text-red-100' 
+                          : 'bg-red-50 border-red-200 text-red-900'
+                      }`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="font-semibold text-xs truncate max-w-[100px] sm:max-w-none">Delete?</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteSession(s.id, e);
+                            setDeleteOverlaySessionId(null);
+                          }}
+                          className="px-2 py-1 rounded-md bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] sm:text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteOverlaySessionId(null);
+                          }}
+                          className={`p-1 rounded-md transition-colors cursor-pointer ${
+                            isDark ? 'hover:bg-red-900/40 text-red-400' : 'hover:bg-red-100 text-red-700'
+                          }`}
+                          title="Keep Chat"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        </div>
 
-        {/* Firebase Connection Status Indicator */}
-        <div className="p-4 border-t border-slate-950 bg-slate-900/10 text-[11px] shrink-0 flex items-center justify-between select-none">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className={`h-2 w-2 rounded-full shrink-0 ${
-              firebaseStatus.firebaseConnected 
-                ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' 
-                : firebaseStatus.hasConfig 
-                  ? 'bg-indigo-500/40 shadow-[0_0_8px_rgba(99,102,241,0.2)] animate-pulse'
-                  : 'bg-indigo-500/20 shadow-[0_0_8px_rgba(99,102,241,0.1)]'
-            }`} />
-            <span className="truncate text-slate-400 font-sans font-medium text-[11px]">
-              {firebaseStatus.firebaseConnected 
-                ? 'Firebase Firestore Connected' 
-                : 'Firebase Offline (Local Active)'}
-            </span>
-          </div>
-          {firebaseStatus.firebaseConnected && (
-            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-md font-bold uppercase shrink-0">Synced</span>
-          )}
+
         </div>
       </aside>
 
@@ -970,7 +1045,9 @@ export default function App() {
 
       {/* 2. CHAT WORKSPACE */}
       <main 
-        className="flex flex-1 flex-col h-full bg-[#090b10] relative overflow-hidden" 
+        className={`flex flex-1 flex-col h-full relative overflow-hidden transition-colors duration-300 ${
+          isDark ? 'bg-black' : 'bg-slate-50'
+        }`} 
         id="workspace_container"
         onDragOver={(e) => {
           e.preventDefault();
@@ -989,52 +1066,62 @@ export default function App() {
         }}
       >
         
-        {/* Top Header Bar with Typewriter Vexon Accent */}
-        <header className="flex h-16 items-center justify-between px-4 sm:px-6 border-b border-slate-900 bg-[#0d1017]/50 backdrop-blur-md select-none shrink-0 z-10">
+        {/* Top Header Bar with Typewriter Fluxell Accent */}
+        <header className={`flex h-16 items-center justify-between px-4 sm:px-6 border-b backdrop-blur-md select-none shrink-0 z-10 transition-colors duration-300 ${
+          isDark ? 'border-neutral-900 bg-black/60' : 'border-slate-200 bg-white/70 shadow-xs'
+        }`}>
           <div className="flex items-center gap-3">
             {/* Sidebar toggle button inside the header */}
             <button
-              onClick={() => setShowSidebar(prev => !prev)}
-              className="p-2 -ml-2 rounded-xl text-slate-400 hover:bg-slate-950 hover:text-white transition-all cursor-pointer relative"
+               onClick={() => setShowSidebar(prev => !prev)}
+              className={`p-2 -ml-2 rounded-xl transition-all cursor-pointer relative ${
+                isDark ? 'text-slate-400 hover:bg-slate-950 hover:text-white' : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+              }`}
               title={showSidebar ? "Close Menu" : "Open Menu"}
             >
               <Menu className="h-5 w-5" />
             </button>
             
-            {/* Logo next to header name */}
-            <div className="flex h-8 w-8 overflow-hidden items-center justify-center rounded-lg border border-slate-800 bg-[#0d1017]/80 shadow-md">
-              <img 
-                src="https://i.imgur.com/eUfx6Xy.png" 
-                alt="Vexon Logo" 
-                className="h-full w-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            
-            {/* Header Text Vexon without animated cursor */}
-            <div className="flex items-center gap-2">
-              <span className="font-sans font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center min-w-[70px]">
-                {Array.from("Vexon").map((char, index) => (
-                  <motion.span
-                    key={`${activeSessionId}-${index}`}
-                    initial={{ opacity: 0, scale: 0.6, filter: 'blur(3px)' }}
-                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                    transition={{
-                      duration: 0.3,
-                      delay: index * 0.12,
-                      ease: "easeOut"
-                    }}
-                  >
-                    {char}
-                  </motion.span>
-                ))}
-              </span>
+            {/* Logo next to header name and Header Text Fluxell grouped closer */}
+            <div className="flex items-center gap-1.5 ml-0.5">
+              <div className={`flex h-8 w-8 overflow-hidden items-center justify-center rounded-lg border shadow-xs transition-colors ${
+                isDark ? 'border-neutral-900 bg-black' : 'border-slate-200 bg-white'
+              }`}>
+                <img 
+                  src="/favicon.jpg" 
+                  alt="Fluxell Logo" 
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
               
-              {/* Pulse status indicator */}
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
+              {/* Header Text Fluxell without animated cursor */}
+              <div className="flex items-center gap-1.5">
+                <span className={`font-sans font-extrabold text-sm sm:text-base tracking-tight flex items-center min-w-fit transition-colors ${
+                  isDark ? 'text-white' : 'text-slate-900'
+                }`}>
+                  {Array.from("Fluxell").map((char, index) => (
+                    <motion.span
+                      key={`${activeSessionId}-${index}`}
+                      initial={{ opacity: 0, scale: 0.6, filter: 'blur(3px)' }}
+                      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                      transition={{
+                        duration: 0.3,
+                        delay: index * 0.12,
+                        ease: "easeOut"
+                      }}
+                    >
+                      {char}
+                    </motion.span>
+                  ))}
+                </span>
+                
+                {/* Pulse status indicator */}
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </div>
             </div>
           </div>
         </header>
@@ -1047,7 +1134,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#090b10]/92 backdrop-blur-md border-[2px] border-dashed border-indigo-500/40 m-4 rounded-3xl"
+              className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-md border-[2px] border-dashed border-indigo-500/40 m-4 rounded-3xl"
             >
               <div className="flex flex-col items-center gap-4 text-center p-6 select-none max-w-sm">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-455 border border-indigo-500/20 animate-bounce">
@@ -1056,7 +1143,7 @@ export default function App() {
                 <div>
                   <h3 className="text-sm font-bold text-slate-100 mb-1">Drop Your File Here</h3>
                   <p className="text-[11px] leading-relaxed text-slate-450">
-                    Vexon will automatically attach this file, document, image, or code to your chat session.
+                    Fluxell will automatically attach this file, document, image, or code to your chat session.
                   </p>
                 </div>
               </div>
@@ -1079,23 +1166,29 @@ export default function App() {
               >
                 {/* Brand Logo & Name under logo */}
                 <div className="flex flex-col items-center justify-center space-y-3 mb-2">
-                  <div className="relative h-20 w-20 overflow-hidden rounded-[24px] bg-black border border-slate-800 shadow-2xl p-1 shrink-0">
+                  <div className={`relative h-20 w-20 overflow-hidden rounded-[24px] border shadow-2xl p-1 shrink-0 transition-colors ${
+                    isDark ? 'bg-black border-slate-800' : 'bg-white border-slate-150'
+                  }`}>
                     <img
-                      src="https://i.imgur.com/eUfx6Xy.png"
-                      alt="Vexon"
+                      src="/favicon.jpg"
+                      alt="Fluxell"
                       className="h-full w-full rounded-[20px] object-cover"
                       referrerPolicy="no-referrer"
                     />
                   </div>
-                  <h1 className="font-display text-2xl font-black tracking-[0.25em] text-white">
-                    VEXON
+                  <h1 className={`font-display text-2xl font-black tracking-[0.25em] transition-colors ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}>
+                    FLUXELL
                   </h1>
                 </div>
 
                 {/* Minimalist typography header */}
                 <div className="space-y-3">
-                  <h2 className="font-display text-xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent flex flex-wrap justify-center gap-x-[0.25em] gap-y-1">
-                    {"I am Vexon, how can I help you today?".split(" ").map((word, wIdx) => (
+                  <h2 className={`font-display text-xl sm:text-3xl font-extrabold tracking-tight bg-clip-text text-transparent flex flex-wrap justify-center gap-x-[0.25em] gap-y-1 transition-all ${
+                    isDark ? 'bg-gradient-to-r from-white via-slate-100 to-slate-400' : 'bg-gradient-to-r from-slate-900 via-slate-700 to-indigo-950'
+                  }`}>
+                    {"I am Fluxell, how can I help you today?".split(" ").map((word, wIdx) => (
                       <motion.span
                         key={wIdx}
                         initial={{ opacity: 0, y: 8 }}
@@ -1117,7 +1210,9 @@ export default function App() {
                       </motion.span>
                     ))}
                   </h2>
-                  <p className="text-[11px] sm:text-xs text-slate-400 max-w-lg mx-auto font-medium leading-relaxed flex flex-wrap justify-center gap-x-[0.25em] gap-y-1">
+                  <p className={`text-[11px] sm:text-xs max-w-lg mx-auto font-medium leading-relaxed flex flex-wrap justify-center gap-x-[0.25em] gap-y-1 transition-colors ${
+                    isDark ? 'text-slate-400' : 'text-slate-600'
+                  }`}>
                     {"A smart AI assistant ready to help you design systems, write code, debug errors, and write scripts in any programming language instantly.".split(" ").map((word, wIdx) => (
                       <motion.span
                         key={wIdx}
@@ -1141,35 +1236,63 @@ export default function App() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 1.15, duration: 0.4 }}
-                  className="space-y-4 max-w-xl mx-auto pt-6 border-t border-slate-900/60"
+                  className={`space-y-4 max-w-xl mx-auto pt-6 border-t transition-colors ${
+                    isDark ? 'border-neutral-900/60' : 'border-slate-150'
+                  }`}
                 >
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">
+                  <p className={`text-[10px] font-bold uppercase tracking-widest font-mono ${
+                    isDark ? 'text-slate-500' : 'text-slate-450'
+                  }`}>
                     Select a programming language to start writing scripts:
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     {[
-                      { name: 'PHP', tech: 'Laravel, Vanilla', prompt: 'I need a PHP script for ' },
-                      { name: 'JavaScript', tech: 'Node.js, React, ES6', prompt: 'Please write a JavaScript script for ' },
-                      { name: 'Python', tech: 'FastAPI, Django, Flask', prompt: 'I want a Python script for ' },
-                      { name: 'C++', tech: 'OOP, Algorithms', prompt: 'Please build a C++ script for ' },
-                      { name: 'HTML & CSS', tech: 'Responsive, Tailwind', prompt: 'Design and code an HTML & CSS layout for ' },
-                      { name: 'Java', tech: 'Spring, OOP, Dev', prompt: 'Please create a Java script for ' },
-                      { name: 'Others', tech: 'Go, SQL, Rust, C#', prompt: 'Help me write a script in ' },
-                    ].map((lang, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setInputText(lang.prompt)}
-                        className="group relative flex flex-col justify-between items-center rounded-xl border border-slate-900 bg-[#07090e]/80 p-3 text-center transition-all duration-200 hover:border-indigo-950/70 hover:bg-[#0c0e14] cursor-pointer select-none active:scale-97"
-                      >
-                        <span className="text-xs font-bold text-slate-200 group-hover:text-indigo-400 transition-colors duration-150">
-                          {lang.name}
-                        </span>
-                        <span className="text-[9px] text-slate-500 font-mono mt-1 w-full truncate">
-                          {lang.tech}
-                        </span>
-                      </button>
-                    ))}
+                      { name: 'PHP', prompt: 'I need a PHP script for ', icon: Server, imageUrl: '/php.png', color: 'text-indigo-400 group-hover:text-indigo-300' },
+                      { name: 'JavaScript', prompt: 'Please write a JavaScript script for ', icon: Code2, imageUrl: '/javascript.png', color: 'text-yellow-500 group-hover:text-yellow-650' },
+                      { name: 'Python', prompt: 'I want a Python script for ', icon: Terminal, imageUrl: '/python.png', color: 'text-blue-500 group-hover:text-blue-600' },
+                      { name: 'C++', prompt: 'Please build a C++ script for ', icon: Cpu, imageUrl: '/cpp.png', color: 'text-rose-500 group-hover:text-rose-600' },
+                      { name: 'HTML & CSS', prompt: 'Design and code an HTML & CSS layout for ', icon: Layers, imageUrl: '/html.png', color: 'text-cyan-500 group-hover:text-cyan-650' },
+                      { name: 'Java', prompt: 'Please create a Java script for ', icon: Coffee, imageUrl: '/java.jpg', color: 'text-amber-605 group-hover:text-amber-500' },
+                      { name: 'Others', prompt: 'Help me write a script in ', icon: Boxes, imageUrl: '/others.jpg', color: 'text-emerald-500 group-hover:text-emerald-600' },
+                    ].map((lang, idx) => {
+                      const IconComponent = lang.icon;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setInputText(lang.prompt)}
+                          className={`group relative flex flex-col items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer select-none active:scale-97 p-4 text-center ${
+                            isDark 
+                              ? 'border-neutral-900 bg-black/80 hover:border-indigo-950/70 hover:bg-[#070709]' 
+                              : 'border-slate-200 bg-white hover:border-indigo-200/60 hover:bg-slate-50/70 hover:shadow-sm'
+                          }`}
+                        >
+                          <div className={`h-10 w-10 rounded-lg mb-2 border transition-all duration-200 flex items-center justify-center overflow-hidden shrink-0 ${
+                            lang.imageUrl ? 'p-0' : 'p-2'
+                          } ${
+                            isDark 
+                              ? 'bg-neutral-950/50 border-neutral-900/50 group-hover:bg-indigo-950/20 group-hover:border-indigo-950/45' 
+                              : 'bg-slate-50/70 border-slate-150/70 group-hover:bg-indigo-50/50 group-hover:border-indigo-200/50'
+                          }`}>
+                            {lang.imageUrl ? (
+                              <img 
+                                src={lang.imageUrl} 
+                                alt={lang.name} 
+                                className="h-full w-full object-cover rounded-md"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <IconComponent className={`h-5 w-5 ${lang.color}`} />
+                            )}
+                          </div>
+                          <span className={`text-xs font-bold font-sans transition-colors duration-150 ${
+                            isDark ? 'text-slate-200 group-hover:text-indigo-400' : 'text-slate-800 group-hover:text-indigo-600'
+                          }`}>
+                            {lang.name}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </motion.div>
               </motion.div>
@@ -1180,7 +1303,7 @@ export default function App() {
                   // Skip displaying the default welcome greeting in the timeline to keep it very elegant
                   if (msg.id === 'welcome') return null;
  
-                  const isVexon = msg.sender === 'xenova' || msg.sender === 'xyron' || msg.sender === 'vexon';
+                  const isFluxell = msg.sender === 'xenova' || msg.sender === 'xyron' || msg.sender === 'fluxell';
                   return (
                     <motion.div
                       key={msg.id}
@@ -1191,16 +1314,20 @@ export default function App() {
                     >
                       {/* Content Bubble container - Full Screen on mobile for AI, shrink-to-fit for user */}
                       <div 
-                        className={`rounded-[18px] px-4 py-3 shadow-sm ${
-                          !isVexon 
-                            ? 'w-auto max-w-[85%] sm:max-w-[70%] bg-indigo-600 text-white rounded-tr-xs selection:bg-slate-200 selection:text-indigo-900' 
+                        className={`rounded-[18px] px-4 py-3 shadow-sm transition-colors duration-300 ${
+                          !isFluxell 
+                            ? 'w-auto max-w-[85%] sm:max-w-[70%] bg-red-600 text-white rounded-tr-xs selection:bg-red-100 selection:text-red-900 shadow-sm shadow-red-950/20' 
                             : msg.isError 
-                              ? 'w-full sm:max-w-[85%] bg-red-950/20 border border-red-900/30 rounded-tl-xs'
-                              : 'w-full sm:max-w-[85%] bg-[#0d1017] border border-slate-900 rounded-tl-xs'
+                              ? isDark
+                                ? 'w-full sm:max-w-[85%] bg-red-950/20 border border-red-900/30 rounded-tl-xs'
+                                : 'w-full sm:max-w-[85%] bg-red-50 border border-red-250/70 text-red-950 rounded-tl-xs'
+                              : isDark
+                                ? 'w-full sm:max-w-[85%] bg-[#0a0a0c] border border-zinc-900/80 rounded-tl-xs shadow-sm'
+                                : 'w-full sm:max-w-[85%] bg-white border border-slate-200/80 text-slate-800 rounded-tl-xs shadow-[0_1.5px_4px_rgba(15,23,42,0.025)]'
                         }`}
                       >
                         {/* User Attachment Render */}
-                        {!isVexon && (msg.attachmentName || msg.attachmentUrl) && (
+                        {!isFluxell && (msg.attachmentName || msg.attachmentUrl) && (
                           <div className="mb-3 rounded-xl bg-slate-950/40 p-2 border border-white/5 flex items-center gap-2.5 max-w-full select-none">
                             {msg.attachmentType?.startsWith('image/') && msg.attachmentUrl ? (
                               <div className="relative h-11 w-11 overflow-hidden rounded-lg bg-black/50 border border-white/10 shrink-0">
@@ -1228,10 +1355,11 @@ export default function App() {
                         {/* Core Response */}
                         <MessageBubbleContent
                           text={msg.text}
-                          isVexon={isVexon}
+                          isFluxell={isFluxell}
                           isStreaming={msg.isStreaming}
                           msgId={msg.id}
                           onTypewriterComplete={handleTypewriterComplete}
+                          isDark={isDark}
                         />
  
                         {msg.isError && (
@@ -1251,9 +1379,13 @@ export default function App() {
                         )}
  
                         {/* Grounding Sources / Citations */}
-                        {isVexon && msg.sources && msg.sources.length > 0 && (
-                          <div className="mt-4 pt-3.5 border-t border-slate-900/80 space-y-2 select-none">
-                            <div className="flex items-center gap-1.5 text-slate-400 text-[10.5px] font-bold">
+                        {isFluxell && msg.sources && msg.sources.length > 0 && (
+                          <div className={`mt-4 pt-3.5 border-t space-y-2 select-none transition-colors duration-300 ${
+                            isDark ? 'border-slate-900/80' : 'border-slate-150'
+                          }`}>
+                            <div className={`flex items-center gap-1.5 text-[10.5px] font-bold ${
+                              isDark ? 'text-slate-400' : 'text-slate-500'
+                            }`}>
                               <Globe className="h-3 w-3 text-indigo-400" />
                               <span>Reference Sources ({msg.sources.length})</span>
                             </div>
@@ -1264,7 +1396,11 @@ export default function App() {
                                   href={src.uri}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 max-w-[220px] rounded-lg bg-[#121620] hover:bg-[#1a2130] border border-slate-850 px-2.5 py-1 text-[10px] font-bold text-indigo-300 hover:text-indigo-200 transition-all duration-150 shadow-sm"
+                                  className={`inline-flex items-center gap-1.5 max-w-[220px] rounded-lg border px-2.5 py-1 text-[10px] font-bold transition-all duration-150 shadow-xs ${
+                                    isDark 
+                                      ? 'bg-[#121620] hover:bg-[#1a2130] border-slate-850 text-indigo-300 hover:text-indigo-200' 
+                                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-indigo-650 hover:text-indigo-700'
+                                  }`}
                                   title={src.title}
                                 >
                                   <span className="truncate">{src.title}</span>
@@ -1298,17 +1434,21 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Vexon Generation Loader indicator without avatar emblem */}
+                {/* Fluxell Generation Loader indicator without avatar emblem */}
                 {isPending && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="flex justify-start w-full animate-pulse-typing"
                   >
-                    <div className="bg-[#0d1017] border border-slate-900 rounded-[18px] rounded-tl-xs px-4 py-3.5 space-y-2 w-full sm:max-w-[85%] select-none">
+                    <div className={`rounded-[18px] rounded-tl-xs px-4 py-3.5 space-y-2 w-full sm:max-w-[85%] border transition-all duration-300 select-none ${
+                      isDark ? 'bg-[#0a0a0c] border-zinc-900/80 shadow-sm' : 'bg-white border-slate-200 shadow-md'
+                    }`}>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex h-1.5 w-1.5 rounded-full bg-indigo-500 animate-ping"></span>
-                        <p className="text-[10px] font-semibold text-slate-450 tracking-wider uppercase font-display">Thinking...</p>
+                        <p className={`text-[10px] font-bold tracking-wider uppercase font-display ${
+                          isDark ? 'text-slate-450' : 'text-slate-500'
+                        }`}>Thinking...</p>
                       </div>
                       <div className="flex items-center gap-1.5 py-1">
                         <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.3s]"></div>
@@ -1322,12 +1462,8 @@ export default function App() {
             )}
           </AnimatePresence>
           <div ref={messagesEndRef} />
-        </div>
-
-
-
-        {/* Workspace Bottom Command Center console input */}
-        <footer className="px-4 md:px-6 py-4 bg-transparent">
+        </div>        {/* Workspace Bottom Command Center console input */}
+        <footer className="px-3 md:px-6 pb-6 pt-2 bg-transparent shrink-0">
           <div className="max-w-3xl mx-auto">
             
             {/* Native file input ref */}
@@ -1340,7 +1476,7 @@ export default function App() {
 
             {/* Pills and Active Status Badges row (elegant modern tags) */}
             {(attachedFile || thinkingModel) && (
-              <div className="flex flex-wrap gap-2 mb-3.5 px-3 select-none">
+              <div className="flex flex-wrap gap-2 mb-3 px-3 select-none">
                 
                 {/* Active File Pill */}
                 {attachedFile && (
@@ -1385,8 +1521,15 @@ export default function App() {
               </div>
             )}
 
-            {/* Input Bar composite - Styled dark/black with smaller buttons & paper-plane send icon */}
-            <div className="relative flex flex-col w-full bg-black border border-slate-800 dark:border-slate-900 rounded-[22px] p-3 shadow-xl focus-within:border-indigo-950/50 transition-all duration-250" id="plus_menu_container">
+            {/* Input Bar composite - Floating design styled dark/black with smaller buttons & paper-plane send icon */}
+            <div 
+              className={`relative flex flex-col w-full rounded-[24px] p-3 transition-all duration-300 transform translate-y-0 hover:-translate-y-0.5 focus-within:-translate-y-0.5 backdrop-blur-md ${
+                isDark 
+                  ? 'bg-black/95 border border-zinc-900/90 shadow-[0_15px_45px_rgba(0,0,0,0.95),0_0_25px_rgba(99,102,241,0.02)] focus-within:border-zinc-800 hover:border-zinc-800 focus-within:shadow-[0_20px_55px_rgba(0,0,0,0.98),0_0_35px_rgba(99,102,241,0.08)]' 
+                  : 'bg-white border border-slate-200 shadow-[0_10px_30px_rgba(15,23,42,0.05),0_0_25px_rgba(99,102,241,0.01)] focus-within:border-indigo-400 hover:border-slate-300 focus-within:shadow-[0_15px_40px_rgba(15,23,42,0.08),0_0_35px_rgba(99,102,241,0.05)]'
+              }`} 
+              id="plus_menu_container"
+            >
               
               <textarea
                 ref={textareaRef}
@@ -1394,25 +1537,31 @@ export default function App() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyPress}
                 onFocus={handleInputFocus}
-                placeholder="Ask Vexon..."
+                placeholder="Ask Fluxell..."
                 rows={2}
                 disabled={isPending}
-                className="w-full bg-transparent border-0 px-2 pt-1 pb-2 text-sm md:text-base text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 resize-none min-h-[50px] max-h-[180px] leading-relaxed font-sans scrollbar-none"
+                className={`w-full bg-transparent border-0 px-2 pt-1 pb-2 text-sm md:text-base focus:outline-none focus:ring-0 resize-none min-h-[50px] max-h-[180px] leading-relaxed font-sans scrollbar-none transition-colors ${
+                  isDark ? 'text-slate-100 placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'
+                }`}
               />
 
               {/* Toolbar with divided sections: left side has Fast vs Code, right side has tools */}
               <div className="flex justify-between items-center mt-2 px-1 pb-0.5">
                 
                 {/* Mode Selector - Mepet ke pinggir kiri */}
-                <div className="flex items-center bg-[#0d1017] p-0.5 rounded-[10px] border border-slate-800/80 select-none">
+                <div className={`flex items-center p-0.5 rounded-[10px] border select-none transition-colors ${
+                  isDark ? 'bg-neutral-950 border-zinc-900/80' : 'bg-slate-100/70 border-slate-205/65'
+                }`}>
                   {/* FAST Button */}
                   <button
                     type="button"
                     onClick={() => setAiMode('fast')}
                     className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${
                       aiMode === 'fast'
-                        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
+                        : isDark
+                          ? 'text-slate-450 hover:text-slate-200 border border-transparent'
+                          : 'text-slate-500 hover:text-slate-800 border border-transparent'
                     }`}
                     title="Fast: Quick & concise responses"
                   >
@@ -1431,8 +1580,10 @@ export default function App() {
                     onClick={() => setAiMode('code')}
                     className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${
                       aiMode === 'code'
-                        ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        ? 'bg-indigo-505/15 text-indigo-500 border border-indigo-500/30'
+                        : isDark
+                          ? 'text-slate-455 hover:text-slate-200 border border-transparent'
+                          : 'text-slate-500 hover:text-slate-800 border border-transparent'
                     }`}
                     title="Code: Smart analysis & script writing"
                   >
@@ -1456,7 +1607,9 @@ export default function App() {
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 ${
                       isListening 
                         ? 'bg-rose-500 hover:bg-rose-600 text-white border-rose-500 shadow-md' 
-                        : 'bg-[#0d1017] text-slate-300 border-slate-800/80 hover:bg-slate-900 shadow-sm'
+                        : isDark
+                          ? 'bg-neutral-950 text-slate-300 border-zinc-900 hover:bg-zinc-900 shadow-sm'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 shadow-xs'
                     }`}
                     title={isListening ? "Recording... Click to stop" : "Voice to Text"}
                   >
@@ -1470,8 +1623,10 @@ export default function App() {
                       onClick={() => setShowPlusMenu(!showPlusMenu)}
                       className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200 cursor-pointer active:scale-95 ${
                         showPlusMenu || attachedFile || thinkingModel
-                          ? 'bg-indigo-650 text-white border border-transparent' 
-                          : 'bg-[#0d1017] text-slate-300 border border-transparent hover:bg-slate-900 shadow-sm'
+                          ? 'bg-indigo-600 text-white border border-transparent' 
+                          : isDark
+                            ? 'bg-neutral-950 text-slate-305 border border-zinc-900/60 hover:bg-zinc-900 shadow-sm'
+                            : 'bg-slate-100 text-slate-600 border border-transparent hover:bg-slate-200 shadow-xs'
                       }`}
                       title="Additional Options"
                     >
@@ -1486,15 +1641,23 @@ export default function App() {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 12, scale: 0.95 }}
                           transition={{ duration: 0.15, ease: 'easeOut' }}
-                          className="absolute bottom-11 right-0 z-50 w-44 rounded-2xl border border-slate-800 bg-[#0d1017] p-1.5 shadow-xl backdrop-blur-md"
+                          className={`absolute bottom-11 right-0 z-50 w-44 rounded-2xl border p-1.5 shadow-xl backdrop-blur-md transition-all duration-300 ${
+                            isDark 
+                              ? 'border-zinc-900 bg-neutral-950' 
+                              : 'border-slate-200 bg-white shadow-md'
+                          }`}
                         >
                           {/* FILE OPTION */}
-                          <button
-                            type="button"
-                            onClick={handleFileClick}
-                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-slate-200 hover:bg-slate-900 transition-all duration-150 cursor-pointer"
-                          >
-                            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-505/10 text-sky-400">
+                           <button
+                             type="button"
+                             onClick={handleFileClick}
+                             className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                               isDark 
+                                 ? 'text-slate-200 hover:bg-zinc-900' 
+                                 : 'text-slate-700 hover:bg-slate-50'
+                             }`}
+                           >
+                            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400">
                               <FileCode className="h-3.5 w-3.5" />
                             </div>
                             <span>File</span>
@@ -1506,18 +1669,20 @@ export default function App() {
                             onClick={toggleThinking}
                             className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition-all duration-150 cursor-pointer ${
                               thinkingModel 
-                                ? 'bg-indigo-600/10 text-indigo-455 hover:bg-indigo-600/20' 
-                                : 'text-slate-200 hover:bg-slate-900'
+                                ? 'bg-indigo-600/10 text-indigo-500 hover:bg-indigo-600/20' 
+                                : isDark
+                                  ? 'text-slate-200 hover:bg-zinc-900'
+                                  : 'text-slate-700 hover:bg-slate-50'
                             }`}
                           >
                             <div className="flex items-center gap-3">
-                              <div className={`flex h-6 w-6 items-center justify-center rounded-lg ${thinkingModel ? 'bg-indigo-505/20' : 'bg-slate-800/25'} text-indigo-400`}>
+                              <div className={`flex h-6 w-6 items-center justify-center rounded-lg ${thinkingModel ? 'bg-indigo-500/20' : isDark ? 'bg-zinc-900' : 'bg-slate-100'} text-indigo-400`}>
                                 <Cpu className="h-3.5 w-3.5 animate-pulse" />
                               </div>
                               <span>Thinking</span>
                             </div>
                             {thinkingModel && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-indigo-505 animate-pulse" />
+                              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
                             )}
                           </button>
                         </motion.div>
@@ -1532,8 +1697,12 @@ export default function App() {
                     disabled={(!inputText.trim() && !attachedFile) || isPending}
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 ${
                       (!inputText.trim() && !attachedFile) 
-                        ? 'bg-[#0d1017] border-slate-800/60 text-slate-600 cursor-not-allowed opacity-60'
-                        : 'bg-[#0d1017] text-slate-200 border-slate-800 hover:bg-slate-900 shadow-sm'
+                        ? isDark
+                          ? 'bg-neutral-950 border-zinc-900/80 text-neutral-700 cursor-not-allowed opacity-60'
+                          : 'bg-slate-50 border-slate-200 text-slate-350 cursor-not-allowed opacity-60'
+                        : isDark
+                          ? 'bg-neutral-950 text-slate-200 border-zinc-900 hover:bg-zinc-900 shadow-sm hover:text-white'
+                          : 'bg-indigo-650 text-white border-transparent hover:bg-indigo-600 shadow-sm shadow-indigo-600/10'
                     }`}
                     title="Kirim Pesan"
                   >
@@ -1548,6 +1717,127 @@ export default function App() {
         </footer>
 
       </main>
+
+      {/* Settings Modal Component Overlay */}
+      <AnimatePresence>
+        {showSettingsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSettingsModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            
+            {/* Dialog Content Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className={`relative z-10 w-full max-w-md overflow-hidden rounded-3xl border p-6 shadow-2xl transition-all ${
+                isDark 
+                  ? 'border-neutral-900 bg-neutral-950 text-white' 
+                  : 'border-slate-200 bg-white text-slate-900'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                <div className="flex items-center gap-2.5">
+                  <Settings className="h-5 w-5 text-indigo-400 shrink-0" />
+                  <h3 className="font-display text-base font-bold tracking-tight">API & Theme Settings</h3>
+                </div>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className={`rounded-xl p-1.5 transition-colors cursor-pointer ${
+                    isDark ? 'text-slate-400 hover:bg-neutral-900 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="mt-5 space-y-5">
+                {/* 1. Api Key Section */}
+                <div className="space-y-2">
+                  <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-400">
+                    Google Gemini API Key
+                  </label>
+                  <div className="relative font-mono">
+                    <input
+                      type={showApiKeyPlain ? 'text' : 'password'}
+                      value={customApiKey}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomApiKey(val);
+                        localStorage.setItem('fluxell_custom_api_key', val);
+                      }}
+                      placeholder="Enter your free API Key..."
+                      className={`w-full rounded-2xl border px-4 py-3 text-xs font-mono transition-all outline-none ${
+                        isDark
+                          ? 'bg-neutral-900 border-neutral-800 text-slate-100 placeholder-slate-600 focus:border-indigo-500/80 focus:bg-neutral-900/60'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKeyPlain(!showApiKeyPlain)}
+                      className={`absolute top-1/2 right-3 -translate-y-1/2 rounded-lg p-1 transition-colors cursor-pointer ${
+                        isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {showApiKeyPlain ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] leading-relaxed text-slate-500">
+                    💡 **Optional & Secure**: Saved locally in your browser. Use this if the server's free quota limit is reached (*RESOURCE_EXHAUSTED*). Get your free API Key from <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-400 font-semibold underline hover:text-indigo-300">Google AI Studio</a>.
+                  </p>
+                </div>
+
+                {/* 2. Model Info */}
+                <div className={`rounded-2xl p-3.5 border text-[11px] leading-relaxed ${
+                  isDark ? 'bg-neutral-900/40 border-neutral-900/60 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}>
+                  <span className="font-bold block text-[10px] uppercase tracking-wider mb-1 text-slate-300">
+                    AI Core Engine
+                  </span>
+                  Powered by the state-of-the-art **Gemini 3.5 Flash** model for smart reasoning and thorough analysis, with automated fallback to **Gemini 3.1 Flash-Lite** to maintain extremely fast response times during server high demand surges.
+                </div>
+
+                {/* 3. Theme status */}
+                <div className="space-y-1.5 pt-2 border-t border-white/5">
+                  <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-400">
+                    Aesthetics & Theme
+                  </label>
+                  <div className="flex items-center gap-2 justify-between">
+                    <span className="text-xs text-slate-350 font-medium">Cosmic Dark Slate Mode</span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full select-none">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Active (Always On)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action */}
+              <div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSettingsModal(false);
+                  }}
+                  className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-550 text-white py-2.5 text-xs font-bold transition-all cursor-pointer active:scale-95 text-center shadow-lg shadow-indigo-600/15"
+                >
+                  Save & Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
