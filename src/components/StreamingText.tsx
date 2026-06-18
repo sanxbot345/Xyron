@@ -12,24 +12,21 @@ export function StreamingText({ text, onComplete }: StreamingTextProps) {
   textRef.current = text;
 
   useEffect(() => {
-    // Split by spaces into word chunks
-    const words = textRef.current.split(' ');
     let currentIndex = 0;
     setDisplayedText('');
 
     let timeoutId: any;
 
-    // Adaptive chunking: small messages scroll fine-grained, 
-    // while long scripts scale chunk sizes so rendering finishes in ~35-45 ticks (under 1s).
-    // This maintains a constant speed and avoids browser CPU bottlenecks from rendering heavy Markdown repeatedly.
-    const targetTicks = 40; 
-    const chunkLength = Math.max(2, Math.ceil(words.length / targetTicks));
+    const fullText = textRef.current;
+    
+    // Smooth character-by-character typing. 
+    // Dynamically scale chunk size for large text to ensure it finishes within ~20-30 ticks (~400ms).
+    const charsPerTick = Math.max(3, Math.ceil(fullText.length / 30));
 
     const stream = () => {
-      if (currentIndex < words.length) {
-        const nextWords = words.slice(currentIndex, currentIndex + chunkLength).join(' ');
-        setDisplayedText(prev => prev + (prev ? ' ' : '') + nextWords);
-        currentIndex += chunkLength;
+      if (currentIndex < fullText.length) {
+        currentIndex += charsPerTick;
+        setDisplayedText(fullText.slice(0, currentIndex));
 
         // Auto-scroll the workspace area smoothly and rapidly to follow typing without bouncing
         const scrollContainer = document.getElementById('workspace_container')?.querySelector('.overflow-y-auto');
@@ -40,11 +37,11 @@ export function StreamingText({ text, onComplete }: StreamingTextProps) {
           });
         }
 
-        // Fast typing speed (10-20ms)
-        const delay = Math.random() * 10 + 10; 
+        // Extremely fast typing speed (~8-12ms per frame) for smoother animation
+        const delay = 8 + Math.random() * 4; 
         timeoutId = setTimeout(stream, delay);
       } else {
-        setDisplayedText(textRef.current);
+        setDisplayedText(fullText);
         onComplete?.();
         
         // Final smooth scroll adjustment to make sure the complete response fits beautifully

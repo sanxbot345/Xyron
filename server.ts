@@ -54,7 +54,7 @@ function getGoogleGenAI(customKey?: string): GoogleGenAI {
 
 const FLUXELL_SYSTEM_INSTRUCTION = `
 Identity & Personality:
-- Name: Fluxell
+- Name: Fluxel
 - Type: Conversational AI Assistant
 - Personality: Warm, natural, extremely human-like, helpful, empathetic, and professional. Speak in an authentic, flowing, conversational, and non-robotic tone. Avoid overly structured or dry formulas where possible.
 - Language Rules: Maintain natural multilinguality. Always automatically detect and reply in the EXACT language used by the user (Indonesian, Javanese, English, Spanish, etc.). Match the user's vocabulary and dialect seamlessly to be as helpful and relatable as possible.
@@ -266,13 +266,15 @@ app.post("/api/fluxell/chat", async (req, res) => {
     if (aiMode === 'code') {
       systemInstruction += `
 Additional Guidelines - ACTIVE INTELLIGENT CODE & ANALYSIS MODE (PENTING):
-- Provide clean, modular, robust, and well-documented code solutions.
-- Solve coding tasks accurately and efficiently. Avoid overly verbose explanations.
-- Deliver functional code directly with concise, punchy explanations.
+- PENTING: Jawab dengan sangat presisi, cepat, dan efektif!
+- Provide clean, modular, robust, and well-documented code solutions directly.
+- Solve coding tasks accurately and highly efficiently. Speed and accuracy are priorities.
+- Deliver functional code directly with concise, punchy explanations. Do not formulate lengthy introductions.
 `;
     } else if (aiMode === 'fast') {
       systemInstruction += `
 Additional Guidelines - ACTIVE FAST & PRECISE MODE (PENTING):
+- PENTING: Jawab secepat kilat (extremely fast), super ringkas, padat, dan jelas!
 - Answer user queries as succinctly, concisely, and rapidly as possible!
 - Completely eliminate pleasantries or boilerplate lead-ins/lead-outs. Deliver responses instantly to optimize throughput.
 `;
@@ -281,13 +283,14 @@ Additional Guidelines - ACTIVE FAST & PRECISE MODE (PENTING):
     if (thinking) {
       systemInstruction += `
 Additional Guidelines - ACTIVE DEEP THINKING MODE (PENTING):
+- PENTING: Lakukan mode thinking dengan sangat presisi, kritis, namun efisien supaya tidak buang-buang waktu.
 - The user has enabled critical, step-by-step deep reasoning mode.
 - You MUST analyze the request critically, deeply, and step-by-step, explaining your core logic and potential edge cases.
 - Write your logical and planning thoughts FIRST at the beginning of your response, wrapped exclusively inside thinking tags:
 <think>
-[Detailed critical reasoning and step-by-step planning thoughts]
+[Precise and efficient critical reasoning]
 </think>
-- Provide your final response clean and beautifully formatted after the </think> tag.
+- Provide your final response clean, fast, and beautifully formatted after the </think> tag.
 `;
     }
 
@@ -314,11 +317,15 @@ Additional Guidelines - ACTIVE DEEP THINKING MODE (PENTING):
       }
     }
 
+    let currentModel = "gemini-3.5-flash";
+    if (aiMode === "fast" && !thinking) {
+      currentModel = "gemini-3.1-flash-lite";
+    }
+
     let response;
     let attempts = 0;
     const maxAttempts = 3;
-    let currentModel = "gemini-3.5-flash";
-
+    
     while (attempts < maxAttempts) {
       try {
         const aiInstance = getGoogleGenAI(currentApiKey);
@@ -336,9 +343,9 @@ Additional Guidelines - ACTIVE DEEP THINKING MODE (PENTING):
         if (isHighDemand && attempts < maxAttempts) {
           if (currentModel === "gemini-3.5-flash") {
             currentModel = "gemini-3.1-flash-lite";
-            console.warn(`Fluxell: Gemini API 503 High Demand, switching to fallback model ${currentModel}...`);
+            console.warn(`Fluxel: Gemini API 503 High Demand, switching to fallback model ${currentModel}...`);
           } else {
-            console.warn(`Fluxell: Gemini API 503 High Demand... Retrying attempt ${attempts}/${maxAttempts} in 2 seconds...`);
+            console.warn(`Fluxel: Gemini API 503 High Demand... Retrying attempt ${attempts}/${maxAttempts} in 2 seconds...`);
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
         } else {
@@ -366,7 +373,7 @@ Additional Guidelines - ACTIVE DEEP THINKING MODE (PENTING):
     res.json({ text, sources });
 
   } catch (error: any) {
-    console.error("Fluxell Backend API Error:", error);
+    console.error("Fluxel Backend API Error:", error);
     
     const errString = String(error.message || "") + String(error.status || "") + JSON.stringify(error);
     const isQuotaExceeded = errString.includes("429") || 
@@ -394,7 +401,7 @@ Additional Guidelines - ACTIVE DEEP THINKING MODE (PENTING):
     }
 
     res.status(500).json({
-      error: error.message || "An internal error occurred while communicating with the Fluxell calculations core.",
+      error: error.message || "An internal error occurred while communicating with the Fluxel calculations core.",
       details: error.status ? `API Status: ${error.status}` : undefined
     });
   }
@@ -418,10 +425,10 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Fluxell server is active on http://0.0.0.0:${PORT}`);
+    console.log(`Fluxel server is active on http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer().catch((err) => {
-  console.error("Failed to start Fluxell server:", err);
+  console.error("Failed to start Fluxel server:", err);
 });

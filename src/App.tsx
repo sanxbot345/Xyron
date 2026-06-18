@@ -603,71 +603,6 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sync state refs to prevent stale closure in static visualViewport listener
-  const messagesRef = useRef(messages);
-  const isPendingRef = useRef(isPending);
-  useEffect(() => {
-    messagesRef.current = messages;
-    isPendingRef.current = isPending;
-  }, [messages, isPending]);
-
-  // Dynamic Viewport Height & Position management for mobile virtual keyboard
-  const adjustViewport = () => {
-    if (!window.visualViewport) return;
-    const vv = window.visualViewport;
-    const appRoot = document.getElementById('app_root');
-    if (appRoot) {
-      // Pin height and top dynamically to the exact visual viewport bounds (excluding virtual keyboard!)
-      appRoot.style.height = `${vv.height}px`;
-      appRoot.style.top = `${vv.offsetTop}px`;
-    }
-    
-    // Only scroll parent window back to top if it actually shifted, avoids layout/rendering feedback loop
-    if (window.scrollY !== 0 || window.scrollX !== 0) {
-      window.scrollTo(0, 0);
-    }
-    if (document.body.scrollTop !== 0) {
-      document.body.scrollTop = 0;
-    }
-    
-    // Force scroll messages area to the bottom instantly to avoid animating scroll fights
-    if (messagesRef.current.length > 1 || isPendingRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-    }
-  };
-
-  useEffect(() => {
-    if (!window.visualViewport) return;
-
-    const handleViewportResize = () => {
-      adjustViewport();
-    };
-
-    window.visualViewport.addEventListener('resize', handleViewportResize);
-    
-    // Immediate alignment
-    adjustViewport();
-
-    return () => {
-      window.visualViewport?.removeEventListener('resize', handleViewportResize);
-    };
-  }, []);
-
-  // Lock window and document scrolls gently to prevent automatic shifting/panning by mobile browsers on input focus
-  useEffect(() => {
-    const preventWindowScroll = () => {
-      if (window.scrollY !== 0 || window.scrollX !== 0) {
-        window.scrollTo(0, 0);
-      }
-    };
-    
-    window.addEventListener('scroll', preventWindowScroll, { passive: true });
-    
-    return () => {
-      window.removeEventListener('scroll', preventWindowScroll);
-    };
-  }, []);
-
   // Sync scroll on new messages or typing state changes instantly (no smooth-scroll feedback collision)
   useEffect(() => {
     if (messages.length > 1 || isPending) {
@@ -684,11 +619,8 @@ export default function App() {
   }, [inputText]);
 
   const handleInputFocus = () => {
-    adjustViewport();
-    // Progressive viewport checks as keyboard animates/slides up
-    setTimeout(adjustViewport, 40);
-    setTimeout(adjustViewport, 120);
-    setTimeout(adjustViewport, 250);
+    // Keep focus natural without forcing the whole chat to jump
+    // the layout's 100dvh constraint will naturally shrink to reveal input.
   };
 
   const handleSendMessage = async (customText?: string, customFile?: File | null) => {
@@ -795,7 +727,7 @@ export default function App() {
       }
 
       if (!response.ok) {
-        throw new Error(data?.error || 'A system error occurred while contacting Fluxell.');
+        throw new Error(data?.error || 'A system error occurred while contacting Fluxel.');
       }
 
       const fluxellMsg: Message = {
@@ -816,7 +748,7 @@ export default function App() {
       const errorMsg: Message = {
         id: `error-${Date.now()}`,
         sender: 'fluxell',
-        text: `⚠️ **Failed to load response**\n\n${error.message || 'Failed to connect to the Fluxell core server.'}\n\n*Please try sending your message again.*`,
+        text: `⚠️ **Failed to load response**\n\n${error.message || 'Failed to connect to the Fluxel core server.'}\n\n*Please try sending your message again.*`,
         timestamp: Date.now(),
         isError: true
       };
@@ -833,7 +765,7 @@ export default function App() {
   };
 
   const clearChatHistory = () => {
-    if (window.confirm('Are you sure you want to clear your entire chat history with Fluxell?')) {
+    if (window.confirm('Are you sure you want to clear your entire chat history with Fluxel?')) {
       const initialChat: Message[] = [
         {
           id: 'welcome',
@@ -879,7 +811,7 @@ export default function App() {
     : CHIP_PRESETS.filter(chip => chip.category === selectedCategory);
 
   return (
-    <div className={`flex fixed inset-0 w-full transition-colors duration-300 font-sans overflow-hidden ${
+    <div className={`flex relative h-full w-full transition-colors duration-300 font-sans overflow-hidden ${
       isDark ? 'bg-black text-[#f1f5f9]' : 'bg-[#f8fafc] text-slate-800'
     }`} id="app_root">
       
@@ -902,7 +834,7 @@ export default function App() {
             }`}>
               <img 
                 src="/favicon.jpg" 
-                alt="Fluxell Logo" 
+                alt="Fluxel Logo" 
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
               />
@@ -911,7 +843,7 @@ export default function App() {
               <h1 className={`font-display text-lg font-bold tracking-tight flex items-center gap-1.5 font-sans transition-colors ${
                 isDark ? 'text-white' : 'text-slate-900'
               }`}>
-                Fluxell
+                Fluxel
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -1089,7 +1021,7 @@ export default function App() {
               }`}>
                 <img 
                   src="/favicon.jpg" 
-                  alt="Fluxell Logo" 
+                  alt="Fluxel Logo" 
                   className="h-full w-full object-cover"
                   referrerPolicy="no-referrer"
                 />
@@ -1100,7 +1032,7 @@ export default function App() {
                 <span className={`font-sans font-extrabold text-sm sm:text-base tracking-tight flex items-center min-w-fit transition-colors ${
                   isDark ? 'text-white' : 'text-slate-900'
                 }`}>
-                  {Array.from("Fluxell").map((char, index) => (
+                  {Array.from("Fluxel").map((char, index) => (
                     <motion.span
                       key={`${activeSessionId}-${index}`}
                       initial={{ opacity: 0, scale: 0.6, filter: 'blur(3px)' }}
@@ -1143,7 +1075,7 @@ export default function App() {
                 <div>
                   <h3 className="text-sm font-bold text-slate-100 mb-1">Drop Your File Here</h3>
                   <p className="text-[11px] leading-relaxed text-slate-450">
-                    Fluxell will automatically attach this file, document, image, or code to your chat session.
+                    Fluxel will automatically attach this file, document, image, or code to your chat session.
                   </p>
                 </div>
               </div>
@@ -1171,7 +1103,7 @@ export default function App() {
                   }`}>
                     <img
                       src="/favicon.jpg"
-                      alt="Fluxell"
+                      alt="Fluxel"
                       className="h-full w-full rounded-[20px] object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -1179,7 +1111,7 @@ export default function App() {
                   <h1 className={`font-display text-2xl font-black tracking-[0.25em] transition-colors ${
                     isDark ? 'text-white' : 'text-slate-900'
                   }`}>
-                    FLUXELL
+                    FLUXEL
                   </h1>
                 </div>
 
@@ -1188,7 +1120,7 @@ export default function App() {
                   <h2 className={`font-display text-xl sm:text-3xl font-extrabold tracking-tight bg-clip-text text-transparent flex flex-wrap justify-center gap-x-[0.25em] gap-y-1 transition-all ${
                     isDark ? 'bg-gradient-to-r from-white via-slate-100 to-slate-400' : 'bg-gradient-to-r from-slate-900 via-slate-700 to-indigo-950'
                   }`}>
-                    {"I am Fluxell, how can I help you today?".split(" ").map((word, wIdx) => (
+                    {"I am Fluxel, how can I help you today?".split(" ").map((word, wIdx) => (
                       <motion.span
                         key={wIdx}
                         initial={{ opacity: 0, y: 8 }}
@@ -1319,11 +1251,11 @@ export default function App() {
                             ? 'w-auto max-w-[85%] sm:max-w-[70%] bg-red-600 text-white rounded-tr-xs selection:bg-red-100 selection:text-red-900 shadow-sm shadow-red-950/20' 
                             : msg.isError 
                               ? isDark
-                                ? 'w-full sm:max-w-[85%] bg-red-950/20 border border-red-900/30 rounded-tl-xs'
-                                : 'w-full sm:max-w-[85%] bg-red-50 border border-red-250/70 text-red-950 rounded-tl-xs'
+                                ? 'w-fit min-w-[60px] max-w-full sm:max-w-[85%] bg-red-950/20 border border-red-900/30 rounded-tl-xs'
+                                : 'w-fit min-w-[60px] max-w-full sm:max-w-[85%] bg-red-50 border border-red-250/70 text-red-950 rounded-tl-xs'
                               : isDark
-                                ? 'w-full sm:max-w-[85%] bg-[#0a0a0c] border border-zinc-900/80 rounded-tl-xs shadow-sm'
-                                : 'w-full sm:max-w-[85%] bg-white border border-slate-200/80 text-slate-800 rounded-tl-xs shadow-[0_1.5px_4px_rgba(15,23,42,0.025)]'
+                                ? 'w-fit min-w-[60px] max-w-full sm:max-w-[85%] bg-[#0a0a0c] border border-zinc-900/80 rounded-tl-xs shadow-sm'
+                                : 'w-fit min-w-[60px] max-w-full sm:max-w-[85%] bg-white border border-slate-200/80 text-slate-800 rounded-tl-xs shadow-[0_1.5px_4px_rgba(15,23,42,0.025)]'
                         }`}
                       >
                         {/* User Attachment Render */}
@@ -1441,7 +1373,7 @@ export default function App() {
                     animate={{ opacity: 1, y: 0 }}
                     className="flex justify-start w-full animate-pulse-typing"
                   >
-                    <div className={`rounded-[18px] rounded-tl-xs px-4 py-3.5 space-y-2 w-full sm:max-w-[85%] border transition-all duration-300 select-none ${
+                    <div className={`rounded-[18px] rounded-tl-xs px-4 py-3.5 space-y-2 w-fit min-w-[120px] max-w-full sm:max-w-[85%] border transition-all duration-300 select-none ${
                       isDark ? 'bg-[#0a0a0c] border-zinc-900/80 shadow-sm' : 'bg-white border-slate-200 shadow-md'
                     }`}>
                       <div className="flex items-center gap-2">
@@ -1463,7 +1395,7 @@ export default function App() {
           </AnimatePresence>
           <div ref={messagesEndRef} />
         </div>        {/* Workspace Bottom Command Center console input */}
-        <footer className="px-3 md:px-6 pb-6 pt-2 bg-transparent shrink-0">
+        <footer className="px-3 md:px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2 bg-transparent shrink-0 max-w-4xl mx-auto w-full">
           <div className="max-w-3xl mx-auto">
             
             {/* Native file input ref */}
@@ -1537,7 +1469,7 @@ export default function App() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyPress}
                 onFocus={handleInputFocus}
-                placeholder="Ask Fluxell..."
+                placeholder="Ask Fluxel..."
                 rows={2}
                 disabled={isPending}
                 className={`w-full bg-transparent border-0 px-2 pt-1 pb-2 text-sm md:text-base focus:outline-none focus:ring-0 resize-none min-h-[50px] max-h-[180px] leading-relaxed font-sans scrollbar-none transition-colors ${
